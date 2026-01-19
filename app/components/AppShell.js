@@ -65,7 +65,7 @@ export default function AppShell({
             <Link href="/rounds/new">Nueva jugada</Link>
           ) : null}
           {userRole === "admin" ? <Link href="/users">Usuarios</Link> : null}
-          {/* {showAdminNav ? <Link href="/admin/approvals">Aprobaciones</Link> : null} */}
+          {showAdminNav ? <Link href="/admin/approvals">Aprobaciones</Link> : null}
           {userRole === "admin" ? <Link href="/settings">Config</Link> : null}
         </div>
       </nav>
