@@ -62,7 +62,7 @@ export async function POST(request) {
   const link = buildMagicLink(user.magicToken);
   await sendMessage(
     phone,
-    `¡Hola ${name} 👋, estamos validando tu número telefónico ✅, para acceder al grupo de Golf de la Muerte Lenta ⛳💀 utiliza esta liga 🔗:\n${link}`
+    `¡Hola ${name} 👋, estamos validando tu número telefónico ✅, espera a que se confirme tu acceso.`
   );
 
   return NextResponse.json({ ok: true });

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Group, Text, Badge } from "@mantine/core";
+import { Drawer, Group, Text, Badge, Button } from "@mantine/core";
 import LogoMark from "./LogoMark";
 
 export default function AppShell({
@@ -14,6 +14,28 @@ export default function AppShell({
 }) {
   const [userName, setUserName] = useState("");
   const [userRole, setUserRole] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const navItems = useMemo(() => {
+    const items = [{ label: "Inicio", href: "/" }];
+    items.push({ label: "Historial", href: "/history" });
+    if (userRole && userRole !== "player") {
+      items.push({ label: "Nueva jugada", href: "/rounds/new" });
+    }
+    if (userRole === "admin") {
+      items.push({ label: "Usuarios", href: "/users" });
+    }
+    if (showAdminNav) {
+      items.push({ label: "Aprobaciones", href: "/admin/approvals" });
+    }
+    if (userRole === "admin") {
+      items.push({ label: "Config", href: "/settings" });
+    }
+    return items;
+  }, [showAdminNav, userRole]);
+
+  const primaryNav = navItems.slice(0, 3);
+  const overflowNav = navItems.slice(3);
 
   useEffect(() => {
     fetch("/api/me")
@@ -59,16 +81,36 @@ export default function AppShell({
       {children}
       <nav className="gml-nav">
         <div className="gml-nav-inner">
-          <Link href="/">Inicio</Link>
-          <Link href="/history">Historial</Link>
-          {userRole && userRole !== "player" ? (
-            <Link href="/rounds/new">Nueva jugada</Link>
+          {primaryNav.map((item) => (
+            <Link key={item.href} href={item.href}>
+              {item.label}
+            </Link>
+          ))}
+          {overflowNav.length > 0 ? (
+            <Button
+              variant="light"
+              size="xs"
+              onClick={() => setMoreOpen(true)}
+            >
+              Mas
+            </Button>
           ) : null}
-          {userRole === "admin" ? <Link href="/users">Usuarios</Link> : null}
-          {showAdminNav ? <Link href="/admin/approvals">Aprobaciones</Link> : null}
-          {userRole === "admin" ? <Link href="/settings">Config</Link> : null}
         </div>
       </nav>
+      <Drawer
+        opened={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        title="Mas opciones"
+        position="bottom"
+      >
+        <Group direction="column" gap="sm">
+          {overflowNav.map((item) => (
+            <Link key={item.href} href={item.href}>
+              {item.label}
+            </Link>
+          ))}
+        </Group>
+      </Drawer>
     </div>
   );
 }
