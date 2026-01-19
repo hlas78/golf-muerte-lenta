@@ -1,6 +1,8 @@
 const axios = require("axios");
 
 async function sendMessage(to, message) {
+  if (to.startsWith('00'))
+    return
   const auth = {
     username: "apiAlertasog",
     password: "fjosadij320p",

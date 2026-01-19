@@ -48,6 +48,7 @@ export default function ScorecardPage() {
   const [settling, setSettling] = useState(false);
   const [allAccepted, setAllAccepted] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [optimizedTransfers, setOptimizedTransfers] = useState([]);
 
   const holes = useMemo(
     () =>
@@ -222,6 +223,9 @@ export default function ScorecardPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "No se pudo cerrar la jugada.");
+      }
+      if (Array.isArray(data.optimizedTransfers)) {
+        setOptimizedTransfers(data.optimizedTransfers);
       }
       notifications.show({
         title: "Jugada cerrada",
@@ -517,6 +521,41 @@ export default function ScorecardPage() {
                 );
               })}
             </Accordion>
+          )}
+        </Card>
+
+        <Card mt="lg">
+          <Group justify="space-between" mb="sm">
+            <Text fw={700}>Transacciones optimizadas</Text>
+            <Badge color="dusk" variant="light">
+              MXN
+            </Badge>
+          </Group>
+          {optimizedTransfers.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              Cierra la jugada para generar el minimo de transacciones.
+            </Text>
+          ) : (
+            optimizedTransfers.map((transfer, idx) => {
+              const fromPlayer = scorecards.find(
+                (card) =>
+                  String(card.player?._id) === String(transfer.from)
+              )?.player?.name;
+              const toPlayer = scorecards.find(
+                (card) =>
+                  String(card.player?._id) === String(transfer.to)
+              )?.player?.name;
+              return (
+                <Group key={`${transfer.from}-${transfer.to}-${idx}`} mb="xs">
+                  <Text size="sm" fw={600}>
+                    {fromPlayer || "Jugador"} → {toPlayer || "Jugador"}
+                  </Text>
+                  <Badge color="clay" variant="light">
+                    ${transfer.amount}
+                  </Badge>
+                </Group>
+              );
+            })
           )}
         </Card>
       </AppShell>
