@@ -1,0 +1,133 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: radial-gradient(circle at top, rgba(85, 140, 106, 0.18), transparent 55%),
+    radial-gradient(circle at 20% 30%, rgba(236, 120, 52, 0.12), transparent 50%),
+    linear-gradient(180deg, #f8f5ef 0%, #f1f0eb 60%, #ebe8e0 100%);
+  color: #1f2a24;
+  min-height: 100vh;
+}
+
+.gml-shell {
+  padding: 1.5rem 1.25rem 6rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.gml-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.gml-hero {
+  border-radius: 28px;
+  padding: 2rem 1.5rem;
+  background: linear-gradient(135deg, rgba(30, 66, 39, 0.95) 0%, rgba(60, 111, 72, 0.95) 55%, rgba(109, 140, 64, 0.9) 100%);
+  color: #f7f7f2;
+  position: relative;
+  overflow: hidden;
+}
+
+.gml-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15), transparent 50%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.gml-hero h1 {
+  font-family: var(--font-title);
+  font-size: 2.75rem;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.25rem;
+}
+
+.gml-hero p {
+  margin: 0.35rem 0 1.5rem;
+  font-size: 1.05rem;
+  max-width: 420px;
+}
+
+.gml-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.gml-nav {
+  position: fixed;
+  bottom: 1rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.gml-nav-inner {
+  pointer-events: all;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(12px);
+}
+
+.gml-nav-inner a {
+  text-decoration: none;
+  font-weight: 600;
+  color: #2a3a32;
+  font-size: 0.9rem;
+}
+
+.gml-nav-inner a:hover {
+  color: #1d4d2b;
+}
+
+.gml-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.gml-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gml-table-scroll table {
+  min-width: 820px;
+}
+
+.gml-sticky-col {
+  position: sticky;
+  left: 0;
+  background: #f7f5ee;
+  z-index: 2;
+}
+
+tbody .gml-sticky-col {
+  z-index: 1;
+}
+
+@media (max-width: 600px) {
+  .gml-table-scroll table {
+    min-width: 720px;
+  }
+}

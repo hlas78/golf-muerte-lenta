@@ -1,0 +1,559 @@
+{
+ "id": 15444,
+ "club_name": "El Bosque Country Club De Gran Jardin",
+ "course_name": "El Bosque",
+ "location": {
+  "address": "Gran Jardin, 37138 León, Gto., Mexico",
+  "city": "Morelia",
+  "state": "MIC",
+  "country": "Mexico",
+  "latitude": 21.180433,
+  "longitude": -101.7168
+ },
+ "tees": {
+  "female": [
+   {
+    "tee_name": "ROJAS",
+    "course_rating": 68.9,
+    "slope_rating": 127,
+    "bogey_rating": 98.8,
+    "total_yards": 5092,
+    "total_meters": 4656,
+    "number_of_holes": 18,
+    "par_total": 72,
+    "front_course_rating": 35,
+    "front_slope_rating": 133,
+    "front_bogey_rating": 50.7,
+    "back_course_rating": 33.9,
+    "back_slope_rating": 121,
+    "back_bogey_rating": 48.1,
+    "holes": [
+     {
+      "par": 5,
+      "yardage": 406,
+      "handicap": 7
+     },
+     {
+      "par": 4,
+      "yardage": 278,
+      "handicap": 17
+     },
+     {
+      "par": 3,
+      "yardage": 144,
+      "handicap": 9
+     },
+     {
+      "par": 4,
+      "yardage": 257,
+      "handicap": 11
+     },
+     {
+      "par": 4,
+      "yardage": 310,
+      "handicap": 13
+     },
+     {
+      "par": 4,
+      "yardage": 362,
+      "handicap": 1
+     },
+     {
+      "par": 3,
+      "yardage": 122,
+      "handicap": 15
+     },
+     {
+      "par": 5,
+      "yardage": 382,
+      "handicap": 5
+     },
+     {
+      "par": 4,
+      "yardage": 346,
+      "handicap": 3
+     },
+     {
+      "par": 5,
+      "yardage": 391,
+      "handicap": 12
+     },
+     {
+      "par": 4,
+      "yardage": 292,
+      "handicap": 8
+     },
+     {
+      "par": 3,
+      "yardage": 111,
+      "handicap": 18
+     },
+     {
+      "par": 4,
+      "yardage": 304,
+      "handicap": 2
+     },
+     {
+      "par": 4,
+      "yardage": 345,
+      "handicap": 4
+     },
+     {
+      "par": 3,
+      "yardage": 114,
+      "handicap": 16
+     },
+     {
+      "par": 4,
+      "yardage": 264,
+      "handicap": 6
+     },
+     {
+      "par": 4,
+      "yardage": 307,
+      "handicap": 10
+     },
+     {
+      "par": 5,
+      "yardage": 357,
+      "handicap": 14
+     }
+    ]
+   }
+  ],
+  "male": [
+   {
+    "tee_name": "BLANCAS",
+    "course_rating": 71.3,
+    "slope_rating": 129,
+    "bogey_rating": 95.1,
+    "total_yards": 6616,
+    "total_meters": 6050,
+    "number_of_holes": 18,
+    "par_total": 72,
+    "front_course_rating": 35.8,
+    "front_slope_rating": 132,
+    "front_bogey_rating": 48,
+    "back_course_rating": 35.5,
+    "back_slope_rating": 125,
+    "back_bogey_rating": 47.1,
+    "holes": [
+     {
+      "par": 5,
+      "yardage": 471,
+      "handicap": 7
+     },
+     {
+      "par": 4,
+      "yardage": 323,
+      "handicap": 17
+     },
+     {
+      "par": 3,
+      "yardage": 179,
+      "handicap": 9
+     },
+     {
+      "par": 4,
+      "yardage": 377,
+      "handicap": 11
+     },
+     {
+      "par": 4,
+      "yardage": 402,
+      "handicap": 13
+     },
+     {
+      "par": 4,
+      "yardage": 472,
+      "handicap": 1
+     },
+     {
+      "par": 3,
+      "yardage": 167,
+      "handicap": 15
+     },
+     {
+      "par": 5,
+      "yardage": 457,
+      "handicap": 5
+     },
+     {
+      "par": 4,
+      "yardage": 423,
+      "handicap": 3
+     },
+     {
+      "par": 5,
+      "yardage": 515,
+      "handicap": 12
+     },
+     {
+      "par": 4,
+      "yardage": 369,
+      "handicap": 8
+     },
+     {
+      "par": 3,
+      "yardage": 128,
+      "handicap": 18
+     },
+     {
+      "par": 4,
+      "yardage": 401,
+      "handicap": 2
+     },
+     {
+      "par": 4,
+      "yardage": 476,
+      "handicap": 4
+     },
+     {
+      "par": 3,
+      "yardage": 168,
+      "handicap": 16
+     },
+     {
+      "par": 4,
+      "yardage": 389,
+      "handicap": 6
+     },
+     {
+      "par": 4,
+      "yardage": 418,
+      "handicap": 10
+     },
+     {
+      "par": 5,
+      "yardage": 481,
+      "handicap": 14
+     }
+    ]
+   },
+   {
+    "tee_name": "DORADAS",
+    "course_rating": 68.6,
+    "slope_rating": 123,
+    "bogey_rating": 91.4,
+    "total_yards": 6108,
+    "total_meters": 5585,
+    "number_of_holes": 18,
+    "par_total": 72,
+    "front_course_rating": 34.6,
+    "front_slope_rating": 126,
+    "front_bogey_rating": 46.3,
+    "back_course_rating": 34,
+    "back_slope_rating": 120,
+    "back_bogey_rating": 45.1,
+    "holes": [
+     {
+      "par": 5,
+      "yardage": 471,
+      "handicap": 7
+     },
+     {
+      "par": 4,
+      "yardage": 323,
+      "handicap": 17
+     },
+     {
+      "par": 3,
+      "yardage": 155,
+      "handicap": 9
+     },
+     {
+      "par": 4,
+      "yardage": 331,
+      "handicap": 11
+     },
+     {
+      "par": 4,
+      "yardage": 375,
+      "handicap": 13
+     },
+     {
+      "par": 4,
+      "yardage": 445,
+      "handicap": 1
+     },
+     {
+      "par": 3,
+      "yardage": 145,
+      "handicap": 15
+     },
+     {
+      "par": 5,
+      "yardage": 457,
+      "handicap": 5
+     },
+     {
+      "par": 4,
+      "yardage": 403,
+      "handicap": 3
+     },
+     {
+      "par": 5,
+      "yardage": 478,
+      "handicap": 12
+     },
+     {
+      "par": 4,
+      "yardage": 335,
+      "handicap": 8
+     },
+     {
+      "par": 3,
+      "yardage": 111,
+      "handicap": 18
+     },
+     {
+      "par": 4,
+      "yardage": 371,
+      "handicap": 2
+     },
+     {
+      "par": 4,
+      "yardage": 455,
+      "handicap": 4
+     },
+     {
+      "par": 3,
+      "yardage": 150,
+      "handicap": 16
+     },
+     {
+      "par": 4,
+      "yardage": 333,
+      "handicap": 6
+     },
+     {
+      "par": 4,
+      "yardage": 370,
+      "handicap": 10
+     },
+     {
+      "par": 5,
+      "yardage": 400,
+      "handicap": 14
+     }
+    ]
+   },
+{
+    "tee_name": "NEGRAS",
+    "course_rating": 76.7,
+    "slope_rating": 141,
+    "bogey_rating": 102.7,
+    "total_yards": 7706,
+    "total_meters": 7046,
+    "number_of_holes": 18,
+    "par_total": 72,
+    "front_course_rating": 38.8,
+    "front_slope_rating": 146,
+    "front_bogey_rating": 52.3,
+    "back_course_rating": 37.9,
+    "back_slope_rating": 135,
+    "back_bogey_rating": 50.4,
+    "holes": [
+     {
+      "par": 5,
+      "yardage": 571,
+      "handicap": 7
+     },
+     {
+      "par": 4,
+      "yardage": 380,
+      "handicap": 17
+     },
+     {
+      "par": 3,
+      "yardage": 241,
+      "handicap": 9
+     },
+     {
+      "par": 4,
+      "yardage": 424,
+      "handicap": 11
+     },
+     {
+      "par": 4,
+      "yardage": 434,
+      "handicap": 13
+     },
+     {
+      "par": 4,
+      "yardage": 532,
+      "handicap": 1
+     },
+     {
+      "par": 3,
+      "yardage": 271,
+      "handicap": 15
+     },
+     {
+      "par": 5,
+      "yardage": 538,
+      "handicap": 5
+     },
+     {
+      "par": 4,
+      "yardage": 500,
+      "handicap": 3
+     },
+     {
+      "par": 5,
+      "yardage": 573,
+      "handicap": 12
+     },
+     {
+      "par": 4,
+      "yardage": 438,
+      "handicap": 8
+     },
+     {
+      "par": 3,
+      "yardage": 164,
+      "handicap": 18
+     },
+     {
+      "par": 4,
+      "yardage": 440,
+      "handicap": 2
+     },
+     {
+      "par": 4,
+      "yardage": 525,
+      "handicap": 4
+     },
+     {
+      "par": 3,
+      "yardage": 214,
+      "handicap": 16
+     },
+     {
+      "par": 4,
+      "yardage": 437,
+      "handicap": 6
+     },
+     {
+      "par": 4,
+      "yardage": 474,
+      "handicap": 10
+     },
+     {
+      "par": 5,
+      "yardage": 550,
+      "handicap": 14
+     }
+    ]
+   },
+   {
+    "tee_name": "AZULES",
+    "course_rating": 73.2,
+    "slope_rating": 133,
+    "bogey_rating": 97.7,
+    "total_yards": 7035,
+    "total_meters": 6433,
+    "number_of_holes": 18,
+    "par_total": 72,
+    "front_course_rating": 36.6,
+    "front_slope_rating": 131,
+    "front_bogey_rating": 48.7,
+    "back_course_rating": 36.6,
+    "back_slope_rating": 134,
+    "back_bogey_rating": 49,
+    "holes": [
+     {
+      "par": 5,
+      "yardage": 511,
+      "handicap": 7
+     },
+     {
+      "par": 4,
+      "yardage": 347,
+      "handicap": 17
+     },
+     {
+      "par": 3,
+      "yardage": 207,
+      "handicap": 9
+     },
+     {
+      "par": 4,
+      "yardage": 384,
+      "handicap": 11
+     },
+     {
+      "par": 4,
+      "yardage": 402,
+      "handicap": 13
+     },
+     {
+      "par": 4,
+      "yardage": 494,
+      "handicap": 1
+     },
+     {
+      "par": 3,
+      "yardage": 188,
+      "handicap": 15
+     },
+     {
+      "par": 5,
+      "yardage": 487,
+      "handicap": 5
+     },
+     {
+      "par": 4,
+      "yardage": 443,
+      "handicap": 3
+     },
+     {
+      "par": 5,
+      "yardage": 527,
+      "handicap": 12
+     },
+     {
+      "par": 4,
+      "yardage": 390,
+      "handicap": 8
+     },
+     {
+      "par": 3,
+      "yardage": 164,
+      "handicap": 18
+     },
+     {
+      "par": 4,
+      "yardage": 433,
+      "handicap": 2
+     },
+     {
+      "par": 4,
+      "yardage": 504,
+      "handicap": 4
+     },
+     {
+      "par": 3,
+      "yardage": 188,
+      "handicap": 16
+     },
+     {
+      "par": 4,
+      "yardage": 412,
+      "handicap": 6
+     },
+     {
+      "par": 4,
+      "yardage": 418,
+      "handicap": 10
+     },
+     {
+      "par": 5,
+      "yardage": 536,
+      "handicap": 14
+     }
+    ]
+   }   
+  ]
+ }
+}
