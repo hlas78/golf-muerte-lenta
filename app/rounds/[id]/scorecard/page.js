@@ -22,6 +22,7 @@ const PENALTY_LABELS = {
   saltapatras: "Saltapatras",
   paloma: "Paloma",
   nerdina: "Nerdina",
+  whiskeys: "Whiskeys",
 };
 
 const ITEM_LABELS = {
@@ -393,12 +394,14 @@ export default function ScorecardPage() {
                       const putts = entry?.putts;
                       const ohYes = entry?.ohYes;
                       const sandy = entry?.sandy;
+                      const wet = entry?.water;
                       return (
                         <Table.Td key={hole}>
                           {strokes}
                           {putts != null && putts !== 0 ? ` (${putts})` : ""}
                           {ohYes ? " · OY" : ""}
                           {sandy ? " · S" : ""}
+                          {wet ? " · W" : ""}
                         </Table.Td>
                       );
                     })}

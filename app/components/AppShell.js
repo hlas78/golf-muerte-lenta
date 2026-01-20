@@ -16,10 +16,10 @@ export default function AppShell({
   const [userName, setUserName] = useState("");
   const [userRole, setUserRole] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const navItems = useMemo(() => {
     const items = [{ label: "Inicio", href: "/" }];
-    items.push({ label: "Historial", href: "/history" });
     if (userRole && userRole !== "player") {
       items.push({ label: "Nueva jugada", href: "/rounds/new" });
     }
@@ -32,6 +32,7 @@ export default function AppShell({
     if (userRole === "admin") {
       items.push({ label: "Config", href: "/settings" });
     }
+    items.push({ label: "Historial", href: "/history" });
     return items;
   }, [showAdminNav, userRole]);
 
@@ -50,6 +51,16 @@ export default function AppShell({
         setUserRole("");
       });
   }, []);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <div className="gml-shell">
@@ -75,9 +86,16 @@ export default function AppShell({
             ) : null}
           </div>
         </Group>
-        {/* <Badge color="clay" variant="filled">
-          MXN
-        </Badge> */}
+        {userName ? (
+          <Button
+            variant="light"
+            size="xs"
+            onClick={handleLogout}
+            loading={loggingOut}
+          >
+            Cerrar sesion
+          </Button>
+        ) : null}
       </Group>
       {children}
       <Text size="xs" c="dusk.6" mt="lg">

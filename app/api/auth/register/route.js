@@ -17,6 +17,7 @@ export async function POST(request) {
   const payload = await request.json();
   const phone = String(payload.phone || "").trim();
   const name = String(payload.name || "").trim();
+  const handicap = Number(payload.handicap);
 
   if (!/^\d{10}$/.test(phone)) {
     return NextResponse.json(
@@ -28,12 +29,15 @@ export async function POST(request) {
   let user = await User.findOne({ phone });
   if (!user) {
     user = await User.create({
-      name,
+      name: name || `Jugador ${phone.slice(-4)}`,
       phone,
       passwordHash: "pending",
       role: "player",
       status: "pending",
+      handicap: Number.isFinite(handicap) ? handicap : 0,
     });
+  } else if (Number.isFinite(handicap)) {
+    user.handicap = handicap;
   } else if (user.status === "rejected") {
     user.status = "pending";
     user.magicToken = null;
@@ -62,7 +66,7 @@ export async function POST(request) {
   const link = buildMagicLink(user.magicToken);
   await sendMessage(
     phone,
-    `¡Hola ${name} 👋, estamos validando tu número telefónico ✅, espera a que se confirme tu acceso.`
+    `¡Hola ${name || user.name} 👋! \n\nGracias por solicitar tu acceso a ☠️ La Muerte Lenta ☠️\n\nEn cuanto la solicitud sea aprobada, recibirás tu acceso.`
   );
 
   return NextResponse.json({ ok: true });

@@ -17,10 +17,9 @@ import { getSocket } from "@/lib/socketClient";
 
 const PENALTIES = [
   { value: "pinkies", label: "Pinkies" },
-  { value: "cuatriputt", label: "Cuatriputt" },
   { value: "saltapatras", label: "Saltapatras" },
   { value: "paloma", label: "Paloma" },
-  { value: "nerdina", label: "Nerdina" },
+  { value: "whiskeys", label: "Whiskeys" },
 ];
 
 export default function RecordScorecardPage() {
@@ -230,12 +229,24 @@ export default function RecordScorecardPage() {
           nextPutts === 0 &&
           nextStrokes != null &&
           nextStrokes <= par;
+        const penalties = Array.isArray(hole.penalties)
+          ? hole.penalties.filter(
+              (penalty) => !["cuatriputt", "nerdina"].includes(penalty)
+            )
+          : [];
+        if (nextPutts != null && nextPutts >= 4) {
+          penalties.push("cuatriputt");
+        }
+        if (nextStrokes != null && nextStrokes >= 10) {
+          penalties.push("nerdina");
+        }
         return {
           ...hole,
           ...patch,
           strokes: nextStrokes,
           putts: nextPutts,
           holeOut,
+          penalties,
         };
       })
     );
@@ -472,6 +483,15 @@ export default function RecordScorecardPage() {
                 disabled={locked || roundClosed}
               >
                 3 putt
+              </Button>
+              <Button
+                size="xs"
+                variant={hole.water ? "filled" : "light"}
+                color="blue"
+                onClick={() => updateHole(index, { water: !hole.water })}
+                disabled={locked || roundClosed}
+              >
+                Wet
               </Button>
               {holeMeta[hole.hole]?.par === 3 ? (
                 <Button

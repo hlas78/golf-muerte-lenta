@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { createRequire } from "module";
 import connectDb from "@/lib/db";
 import User from "@/lib/models/User";
-import { verifyToken } from "@/lib/auth";
+import { hashPassword, verifyToken } from "@/lib/auth";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
@@ -14,6 +14,18 @@ const CONFIRM_MESSAGES = [
   "Bienvenido al caos. Ya puedes entrar. 🧨⛳️",
   "Admin dio el ok. A ver si hoy si juegas. 🤝🏌️",
 ];
+
+const PASSWORD_MESSAGES = [
+  "Tu contraseña de acceso es: *{password}* y puedes usarla en otros dispositivos. 🔑📱"];
+
+function generatePassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < 8; i += 1) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+}
 
 export async function POST(request, { params }) {
   await connectDb();
@@ -34,11 +46,18 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
   user.status = "active";
+  const tempPassword = generatePassword();
+  user.passwordHash = await hashPassword(tempPassword);
   await user.save();
 
   const baseUrl = process.env.APP_URL || "http://localhost:3000";
   const url = `${baseUrl}/auth/verify?token=${user.magicToken}`;
-  const message = `${CONFIRM_MESSAGES[Math.floor(Math.random() * CONFIRM_MESSAGES.length)]}\n${url}`;
+  const passwordMessage =
+    PASSWORD_MESSAGES[Math.floor(Math.random() * PASSWORD_MESSAGES.length)].replace(
+      "{password}",
+      tempPassword
+    );
+  const message = `${CONFIRM_MESSAGES[Math.floor(Math.random() * CONFIRM_MESSAGES.length)]}\n\n${passwordMessage}\n\nÉsta es tu liga de acceso, puedes usarla para ingresar al sistema sin contraseña:\n${url}\n\n`;
   await sendMessage(user.phone, message);
   return NextResponse.json({ ok: true });
 }

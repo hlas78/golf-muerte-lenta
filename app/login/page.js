@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [registerPhone, setRegisterPhone] = useState("");
   const [registerName, setRegisterName] = useState("");
+  const [registerHandicap, setRegisterHandicap] = useState("");
   const [loading, setLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
 
@@ -55,19 +56,24 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: registerPhone, name: registerName }),
+        body: JSON.stringify({
+          phone: registerPhone,
+          name: registerName,
+          handicap: registerHandicap,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "No se pudo enviar la liga.");
       }
       notifications.show({
-        title: "Liga enviada",
-        message: "Revisa WhatsApp para completar el registro.",
+        title: "Solicitud enviada",
+        message: "Se mandaron tus datos a revisión, te daremos el acceso a través de whatsapp.",
         color: "club",
       });
       setRegisterPhone("");
       setRegisterName("");
+      setRegisterHandicap("");
     } catch (error) {
       notifications.show({
         title: "Registro fallido",
@@ -131,6 +137,15 @@ export default function LoginPage() {
               description="Nombre y apellido"
               value={registerName}
               onChange={(event) => setRegisterName(event.currentTarget.value)}
+              required
+            />
+            <TextInput
+              label="Handicap"
+              placeholder="12"
+              value={registerHandicap}
+              onChange={(event) =>
+                setRegisterHandicap(event.currentTarget.value)
+              }
               required
             />
             <Group justify="space-between">

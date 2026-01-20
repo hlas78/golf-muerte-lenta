@@ -104,11 +104,6 @@ export default function SettingsPage() {
               onChange={(value) => updateBet("match", value)}
             />
             <NumberInput
-              label="Sandy"
-              value={bets.sandyPar}
-              onChange={(value) => updateBet("sandyPar", value)}
-            />
-            <NumberInput
               label="Birdie"
               value={bets.birdie}
               onChange={(value) => updateBet("birdie", value)}
@@ -127,6 +122,11 @@ export default function SettingsPage() {
               label="Hole out"
               value={bets.holeOut}
               onChange={(value) => updateBet("holeOut", value)}
+            />
+            <NumberInput
+              label="Sandy"
+              value={bets.sandyPar}
+              onChange={(value) => updateBet("sandyPar", value)}
             />
             <NumberInput
               label="Wet par"
