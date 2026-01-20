@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Drawer, Group, Text, Badge, Button } from "@mantine/core";
+import { buildInfo } from "../buildInfo";
 import LogoMark from "./LogoMark";
 
 export default function AppShell({
@@ -79,6 +80,9 @@ export default function AppShell({
         </Badge> */}
       </Group>
       {children}
+      <Text size="xs" c="dusk.6" mt="lg">
+        v{buildInfo.version} · {buildInfo.builtAt}
+      </Text>
       <nav className="gml-nav">
         <div className="gml-nav-inner">
           {primaryNav.map((item) => (

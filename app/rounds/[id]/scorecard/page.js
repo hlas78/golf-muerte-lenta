@@ -138,7 +138,12 @@ export default function ScorecardPage() {
     }
     fetch(`/api/rounds/${params.id}/summary`)
       .then((res) => res.json())
-      .then((data) => setSummary(data))
+      .then((data) => {
+        setSummary(data);
+        if (Array.isArray(data.payments)) {
+          setOptimizedTransfers(minimizeTransfers(data.payments));
+        }
+      })
       .catch(() => setSummary(null));
   }, [params]);
 
@@ -245,6 +250,45 @@ export default function ScorecardPage() {
     } finally {
       setClosing(false);
     }
+  };
+
+  const minimizeTransfers = (payments) => {
+    const summaryMap = {};
+    payments.forEach((payment) => {
+      const from = String(payment.from);
+      const to = String(payment.to);
+      summaryMap[from] = (summaryMap[from] || 0) - payment.amount;
+      summaryMap[to] = (summaryMap[to] || 0) + payment.amount;
+    });
+
+    const debtors = [];
+    const creditors = [];
+    Object.entries(summaryMap).forEach(([playerId, amount]) => {
+      if (amount < 0) {
+        debtors.push({ playerId, amount: Math.abs(amount) });
+      } else if (amount > 0) {
+        creditors.push({ playerId, amount });
+      }
+    });
+
+    const transfers = [];
+    let i = 0;
+    let j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const pay = Math.min(debtors[i].amount, creditors[j].amount);
+      if (pay > 0) {
+        transfers.push({
+          from: debtors[i].playerId,
+          to: creditors[j].playerId,
+          amount: pay,
+        });
+        debtors[i].amount -= pay;
+        creditors[j].amount -= pay;
+      }
+      if (debtors[i].amount === 0) i += 1;
+      if (creditors[j].amount === 0) j += 1;
+    }
+    return transfers;
   };
 
   return (
@@ -533,7 +577,7 @@ export default function ScorecardPage() {
           </Group>
           {optimizedTransfers.length === 0 ? (
             <Text size="sm" c="dusk.6">
-              Cierra la jugada para generar el minimo de transacciones.
+              No hay transacciones optimizadas para mostrar.
             </Text>
           ) : (
             optimizedTransfers.map((transfer, idx) => {

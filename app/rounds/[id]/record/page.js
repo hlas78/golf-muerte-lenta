@@ -83,13 +83,6 @@ export default function RecordScorecardPage() {
           return acc;
         }, {});
         setHoleMeta(metaMap);
-        setHoles((prev) =>
-          prev.map((hole) => ({
-            ...hole,
-            strokes: metaMap[hole.hole]?.par ?? hole.strokes ?? "",
-            putts: 2,
-          }))
-        );
         initialized.current = true;
       })
       .catch(() => {
@@ -213,7 +206,38 @@ export default function RecordScorecardPage() {
       return;
     }
     setHoles((prev) =>
-      prev.map((hole, idx) => (idx === index ? { ...hole, ...patch } : hole))
+      prev.map((hole, idx) => {
+        if (idx !== index) {
+          return hole;
+        }
+        const hasStrokes = Object.prototype.hasOwnProperty.call(patch, "strokes");
+        const hasPutts = Object.prototype.hasOwnProperty.call(patch, "putts");
+        const nextStrokes =
+          hasStrokes && patch.strokes !== "" && patch.strokes != null
+            ? Number(patch.strokes)
+            : hasStrokes
+            ? null
+            : hole.strokes;
+        const nextPutts =
+          hasPutts && patch.putts !== "" && patch.putts != null
+            ? Number(patch.putts)
+            : hasPutts
+            ? null
+            : hole.putts;
+        const par = holeMeta[hole.hole]?.par;
+        const holeOut =
+          par != null &&
+          nextPutts === 0 &&
+          nextStrokes != null &&
+          nextStrokes <= par;
+        return {
+          ...hole,
+          ...patch,
+          strokes: nextStrokes,
+          putts: nextPutts,
+          holeOut,
+        };
+      })
     );
   };
 
@@ -233,12 +257,8 @@ export default function RecordScorecardPage() {
     updateHole(index, { strokes: value });
   };
 
-  const applyPuttPreset = (index, preset) => {
-    if (preset === "holeout") {
-      updateHole(index, { putts: 0, holeOut: true });
-      return;
-    }
-    updateHole(index, { putts: 3, holeOut: false });
+  const applyPuttPreset = (index) => {
+    updateHole(index, { putts: 3 });
   };
 
   const handleSave = async () => {
@@ -269,8 +289,12 @@ export default function RecordScorecardPage() {
           playerId: activePlayerId,
           holes: holes.map((hole) => ({
             ...hole,
-            strokes: hole.strokes ? Number(hole.strokes) : 0,
-            putts: hole.putts ? Number(hole.putts) : 0,
+            strokes:
+              hole.strokes === "" || hole.strokes == null
+                ? null
+                : Number(hole.strokes),
+            putts:
+              hole.putts === "" || hole.putts == null ? null : Number(hole.putts),
             par: holeMeta[hole.hole]?.par,
           })),
         }),
@@ -314,8 +338,12 @@ export default function RecordScorecardPage() {
           playerId: activePlayerId,
           holes: holes.map((hole) => ({
             ...hole,
-            strokes: hole.strokes ? Number(hole.strokes) : 0,
-            putts: hole.putts ? Number(hole.putts) : 0,
+            strokes:
+              hole.strokes === "" || hole.strokes == null
+                ? null
+                : Number(hole.strokes),
+            putts:
+              hole.putts === "" || hole.putts == null ? null : Number(hole.putts),
             par: holeMeta[hole.hole]?.par,
           })),
         }),
@@ -440,15 +468,7 @@ export default function RecordScorecardPage() {
               <Button
                 size="xs"
                 variant="light"
-                onClick={() => applyPuttPreset(index, "holeout")}
-                disabled={locked || roundClosed}
-              >
-                Hole out
-              </Button>
-              <Button
-                size="xs"
-                variant="light"
-                onClick={() => applyPuttPreset(index, "3putt")}
+                onClick={() => applyPuttPreset(index)}
                 disabled={locked || roundClosed}
               >
                 3 putt
