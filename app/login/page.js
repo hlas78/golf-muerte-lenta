@@ -29,13 +29,14 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ phone, password }),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Error al iniciar sesion");
       }
-      router.push("/");
+      window.location.href = "/";
     } catch (error) {
       notifications.show({
         title: "No se pudo ingresar",
