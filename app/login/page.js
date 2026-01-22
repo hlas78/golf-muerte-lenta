@@ -77,7 +77,7 @@ export default function LoginPage() {
     } catch (error) {
       notifications.show({
         title: "Registro fallido",
-        message: error.message || "Verifica el telefono.",
+        message: error.message || "Verifica el teléfono.",
         color: "clay",
       });
     } finally {
@@ -91,7 +91,7 @@ export default function LoginPage() {
         <Card>
           <form className="gml-form" onSubmit={handleLogin}>
             <TextInput
-              label="Telefono"
+              label="Teléfono"
               placeholder="5512345678"
               description="10 digitos"
               value={phone}
@@ -124,7 +124,7 @@ export default function LoginPage() {
           </Text>
           <form className="gml-form" onSubmit={handleRegister}>
             <TextInput
-              label="Telefono para registro"
+              label="Teléfono para registro"
               placeholder="5512345678"
               description="10 digitos"
               value={registerPhone}
@@ -134,7 +134,7 @@ export default function LoginPage() {
             <TextInput
               label="Nombre"
               placeholder="Nombre Apellido"
-              description="Nombre y apellido"
+              description="Nombre, apodo, alias, aka o lo que quieras ponerle para que te reconozcan"
               value={registerName}
               onChange={(event) => setRegisterName(event.currentTarget.value)}
               required

@@ -35,6 +35,22 @@ export default function Home() {
     (round) => round.status === "open" || round.status === "active"
   );
   const closedRounds = rounds.filter((round) => round.status === "closed");
+  const formatRoundDate = (value) => {
+    if (!value) {
+      return "Sin fecha";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "Sin fecha";
+    }
+    return date.toLocaleString("es-MX", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   return (
     <main>
@@ -102,6 +118,22 @@ export default function Home() {
                     {round.holes} hoyos · Jugadores {round.players?.length || 0}
                   </Text>
                   <Text size="sm" c="dusk.6">
+                    {round.players?.length
+                      ? round.players
+                          .map((player) => player?.name)
+                          .filter(Boolean)
+                          .join(", ")
+                      : "Sin jugadores"}
+                  </Text>
+                  {round.description ? (
+                    <Text size="sm" c="dusk.6">
+                      {round.description}
+                    </Text>
+                  ) : null}
+                  <Text size="sm" c="dusk.6">
+                    {formatRoundDate(round.createdAt)}
+                  </Text>
+                  <Text size="sm" c="dusk.6">
                     Supervisa: {round.supervisor?.name || "Por asignar"}
                   </Text>
                 </Card>
@@ -144,6 +176,14 @@ export default function Home() {
                   </Text>
                   <Text size="sm" c="dusk.6">
                     {round.holes} hoyos · Jugadores {round.players?.length || 0}
+                  </Text>
+                  {round.description ? (
+                    <Text size="sm" c="dusk.6">
+                      {round.description}
+                    </Text>
+                  ) : null}
+                  <Text size="sm" c="dusk.6">
+                    {formatRoundDate(round.createdAt)}
                   </Text>
                   <Text size="sm" c="dusk.6">
                     Pagos disponibles

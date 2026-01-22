@@ -22,6 +22,23 @@ node scripts/seedCourses.js
 - MongoDB + Mongoose
 - Socket.IO para tarjetas en vivo
 
+## Changelog
+
+### 0.1.2
+
+- Sesion permanente (token y cookie de larga duracion).
+- Registro de tarjeta precarga datos guardados y muestra aviso de carga.
+- Nueva jugada: descripcion opcional y fecha de creacion visible en tablero.
+
+### 0.1.1
+
+- Registro solicita handicap; aprobacion genera contraseña aleatoria y se envia en el mensaje de bienvenida.
+- Tarjetas: se quitan valores predeterminados y no se guardan ceros sin captura.
+- Castigos/eventos: Wet vuelve a captura y se muestra con "W"; Cuatriputt y Nerdina se calculan automatico; nuevo castigo manual "Whiskeys".
+- Navegacion: boton "Cerrar sesion" en el encabezado.
+- Dashboard: en "Jugadas abiertas" se listan jugadores por nombre.
+
+## Cloud config para generar server
 
 #cloud-config
 users:

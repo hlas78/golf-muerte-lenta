@@ -34,6 +34,7 @@ export default function RecordScorecardPage() {
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [loadingExisting, setLoadingExisting] = useState(false);
   const [locked, setLocked] = useState(false);
   const [roundClosed, setRoundClosed] = useState(false);
   const [holeMeta, setHoleMeta] = useState({});
@@ -94,7 +95,12 @@ export default function RecordScorecardPage() {
   }, [params]);
 
   useEffect(() => {
-    if (!params?.id || loadedExisting.current === true) {
+    if (
+      !params?.id ||
+      !round?._id ||
+      holes.length === 0 ||
+      loadedExisting.current === true
+    ) {
       return;
     }
     const paramPlayerId = searchParams.get("playerId");
@@ -112,6 +118,7 @@ export default function RecordScorecardPage() {
       return;
     }
     setActivePlayerId(targetId);
+    setLoadingExisting(true);
     fetch(`/api/rounds/${params.id}/scorecards`)
       .then((res) => res.json())
       .then((data) => {
@@ -158,11 +165,13 @@ export default function RecordScorecardPage() {
           );
         }
         loadedExisting.current = true;
+        setLoadingExisting(false);
       })
       .catch(() => {
         loadedExisting.current = true;
+        setLoadingExisting(false);
       });
-  }, [me, params, role, round, router, searchParams]);
+  }, [holes.length, me, params, role, round, router, searchParams]);
 
   useEffect(() => {
     if (!round?.courseSnapshot?.tees || !me?._id) {
@@ -416,6 +425,11 @@ export default function RecordScorecardPage() {
               ? `Guardado automatico ${lastSavedAt.toLocaleTimeString()}`
               : "Guardado automatico activo"}
           </Text>
+          {loadingExisting ? (
+            <Text size="xs" c="dusk.6" mt="xs">
+              Cargando datos guardados...
+            </Text>
+          ) : null}
           {locked ? (
             <Text size="xs" c="dusk.6" mt="xs">
               Tarjeta aceptada por supervisor. Edicion bloqueada.

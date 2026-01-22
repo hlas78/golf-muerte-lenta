@@ -49,6 +49,7 @@ export async function POST(request) {
     createdBy: payload.createdBy,
     supervisor: payload.supervisor,
     players: payload.players || [],
+    description: payload.description || "",
     configSnapshot: config.bets,
   });
 

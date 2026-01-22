@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, Group, MultiSelect, Select, Text } from "@mantine/core";
+import {
+  Button,
+  Card,
+  Group,
+  MultiSelect,
+  Select,
+  Text,
+  Textarea,
+} from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../components/AppShell";
 
@@ -15,6 +23,7 @@ export default function NewRoundPage() {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedPlayers, setSelectedPlayers] = useState([]);
+  const [description, setDescription] = useState("");
 
   useEffect(() => {
     fetch("/api/me")
@@ -85,6 +94,7 @@ export default function NewRoundPage() {
           createdBy: me.user?._id,
           supervisor: me.user?._id,
           players: selectedPlayers,
+          description: description.trim(),
         }),
       });
       const data = await res.json();
@@ -134,6 +144,14 @@ export default function NewRoundPage() {
               onChange={setSelectedPlayers}
               searchable
               clearable
+            />
+            <Textarea
+              label="Descripcion (opcional)"
+              placeholder=""
+              value={description}
+              onChange={(event) => setDescription(event.currentTarget.value)}
+              autosize
+              minRows={2}
             />
             <Group justify="space-between" mt="md">
               <Text size="sm" c="dusk.6">
