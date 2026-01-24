@@ -24,6 +24,14 @@ node scripts/seedCourses.js
 
 ## Changelog
 
+### 0.1.3
+
+- Unificacion de la pantalla de jugada y tarjeta en /rounds/[id].
+- Auto-union y envio de mensaje de bienvenida al crear jugadas con jugadores.
+- Stepper grande para golpes y putts (botones +/-).
+- Mensajes de jugada ganadora y castigos con temporizador de 30s.
+- Medal por vuelta y match por suma de vueltas.
+
 ### 0.1.2
 
 - Sesion permanente (token y cookie de larga duracion).

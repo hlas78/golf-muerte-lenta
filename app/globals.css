@@ -130,8 +130,39 @@ tbody .gml-sticky-col {
   z-index: 1;
 }
 
+.gml-win-cell {
+  background: rgba(62, 148, 90, 0.18);
+}
+
 @media (max-width: 600px) {
   .gml-table-scroll table {
     min-width: 720px;
   }
+
+  .gml-stepper-controls button {
+    min-width: 52px;
+    height: 48px;
+    font-size: 1.2rem;
+  }
+}
+
+.gml-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.gml-stepper-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  padding: 0.35rem 0.5rem;
+}
+
+.gml-stepper-value {
+  min-width: 32px;
+  text-align: center;
 }

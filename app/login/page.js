@@ -141,6 +141,7 @@ export default function LoginPage() {
             />
             <TextInput
               label="Handicap"
+              description="Captura el index que se muestra en tu Grint"
               placeholder="12"
               value={registerHandicap}
               onChange={(event) =>
@@ -157,7 +158,7 @@ export default function LoginPage() {
                 Volver
               </Button>
               <Button color="clay" type="submit" loading={registering}>
-                Enviar liga
+                Registrarme
               </Button>
             </Group>
           </form>

@@ -4,16 +4,42 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
+  Accordion,
+  Badge,
   Button,
   Card,
   Group,
   Modal,
   Select,
+  Table,
   Text,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../components/AppShell";
 import { getSocket } from "@/lib/socketClient";
+
+const PENALTY_LABELS = {
+  pinkies: "Pinkies",
+  cuatriputt: "Cuatriputt",
+  saltapatras: "Saltapatras",
+  paloma: "Paloma",
+  nerdina: "Nerdiña",
+  whiskeys: "Whiskeys",
+};
+
+const ITEM_LABELS = {
+  holeWinner: "Ganador de hoyo",
+  medalFront: "Medal vuelta 1",
+  medalBack: "Medal vuelta 2",
+  match: "Ganador de match",
+  sandyPar: "Sandy",
+  birdie: "Birdie",
+  eagle: "Aguila",
+  albatross: "Albatross",
+  holeOut: "Hole out",
+  wetPar: "Wet par",
+  ohYes: "Oh yes",
+};
 
 export default function RoundDetailPage() {
   const params = useParams();
@@ -25,6 +51,20 @@ export default function RoundDetailPage() {
   const [joinTee, setJoinTee] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [updatingTee, setUpdatingTee] = useState(null);
+  const [scorecards, setScorecards] = useState([]);
+  const [viewMode, setViewMode] = useState("gross");
+  const [summary, setSummary] = useState(null);
+  const [settling, setSettling] = useState(false);
+  const [allAccepted, setAllAccepted] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [optimizedTransfers, setOptimizedTransfers] = useState([]);
+
+  const holes = useMemo(
+    () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
+    [round]
+  );
+  const frontHoles = useMemo(() => holes.slice(0, 9), [holes]);
+  const backHoles = useMemo(() => holes.slice(9, 18), [holes]);
 
   useEffect(() => {
     if (!params?.id) {
@@ -66,9 +106,58 @@ export default function RoundDetailPage() {
     };
   }, [me, params]);
 
-  const courseName = round?.courseSnapshot
-    ? `${round.courseSnapshot.clubName} · ${round.courseSnapshot.courseName}`
-    : "Jugada";
+  const loadScorecards = () => {
+    if (!params?.id) {
+      return;
+    }
+    fetch(`/api/rounds/${params.id}/scorecards`)
+      .then((res) => res.json())
+      .then((data) => {
+        setScorecards(Array.isArray(data.scorecards) ? data.scorecards : []);
+        setAllAccepted(Boolean(data.allAccepted));
+      })
+      .catch(() => setScorecards([]));
+  };
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (round?._id) {
+      socket.emit("round:join", round._id);
+    }
+    socket.on("scorecard:update", () => {
+      loadScorecards();
+    });
+
+    return () => {
+      socket.off("scorecard:update");
+    };
+  }, [round]);
+
+  useEffect(() => {
+    if (!round?._id) {
+      return;
+    }
+    loadScorecards();
+  }, [round]);
+
+  useEffect(() => {
+    if (!params?.id) {
+      return;
+    }
+    fetch(`/api/rounds/${params.id}/summary`)
+      .then((res) => res.json())
+      .then((data) => {
+        setSummary(data);
+        if (Array.isArray(data.payments)) {
+          setOptimizedTransfers(minimizeTransfers(data.payments));
+        }
+      })
+      .catch(() => setSummary(null));
+  }, [params]);
+
+  const courseName = round?.courseSnapshot?.clubName
+    ? round.courseSnapshot.clubName
+    : round?.courseSnapshot?.courseName || "Jugada";
 
   const players = useMemo(() => round?.players || [], [round]);
   const playerTees = useMemo(() => round?.playerTees || [], [round]);
@@ -82,7 +171,8 @@ export default function RoundDetailPage() {
   );
   const canManage =
     me?.role === "admin" ||
-    (me?._id && String(round?.supervisor) === String(me._id));
+    (me?._id && String(round?.supervisor?._id) === String(me._id));
+  const canApprove = canManage;
   const isClosed = round?.status === "closed";
 
   const teeOptions = useMemo(() => {
@@ -119,6 +209,119 @@ export default function RoundDetailPage() {
       setJoinTee(existing.teeName);
     }
   }, [round, me]);
+
+  const penaltyFeed = useMemo(() => {
+    const items = [];
+    scorecards.forEach((card) => {
+      card.holes?.forEach((hole) => {
+        if (Array.isArray(hole.penalties) && hole.penalties.length > 0) {
+          hole.penalties.forEach((penalty) => {
+            items.push({
+              hole: hole.hole,
+              player: card.player?.name || "Jugador",
+              penalty: PENALTY_LABELS[penalty] || penalty,
+            });
+          });
+        }
+      });
+    });
+    return items;
+  }, [scorecards]);
+
+  const winningCells = useMemo(() => {
+    if (!Array.isArray(summary?.payments)) {
+      return {};
+    }
+    return summary.payments.reduce((acc, payment) => {
+      if (!payment.hole) {
+        return acc;
+      }
+      const playerId = String(payment.to);
+      if (!acc[playerId]) {
+        acc[playerId] = new Set();
+      }
+      acc[playerId].add(payment.hole);
+      return acc;
+    }, {});
+  }, [summary]);
+
+  const winningTotals = useMemo(() => {
+    if (!Array.isArray(summary?.payments)) {
+      return {};
+    }
+    return summary.payments.reduce((acc, payment) => {
+      const playerId = String(payment.to);
+      if (!acc[playerId]) {
+        acc[playerId] = new Set();
+      }
+      acc[playerId].add(payment.item);
+      return acc;
+    }, {});
+  }, [summary]);
+
+  const getHoleHandicapsForCard = (card) => {
+    const tees = round?.courseSnapshot?.tees;
+    if (!tees) {
+      return [];
+    }
+    const allTees = [...(tees.male || []), ...(tees.female || [])];
+    const teeName =
+      card.teeName ||
+      round?.playerTees?.find(
+        (entry) => String(entry.player) === String(card.player?._id)
+      )?.teeName ||
+      round?.teeName;
+    const selected =
+      allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
+    return (
+      selected?.holes?.map((hole, idx) => ({
+        hole: idx + 1,
+        handicap: hole.handicap,
+      })) || []
+    );
+  };
+
+  const buildStrokesMap = (handicap, holeHandicaps, holesCount) => {
+    const strokesPerHole = {};
+    const base = Math.floor(handicap / holesCount);
+    const extra = handicap % holesCount;
+    const sorted = holeHandicaps
+      .slice(0, holesCount)
+      .map((hole) => ({ hole: hole.hole, rank: hole.handicap }))
+      .sort((a, b) => a.rank - b.rank);
+    sorted.forEach((hole, idx) => {
+      strokesPerHole[hole.hole] = base + (idx < extra ? 1 : 0);
+    });
+    return strokesPerHole;
+  };
+
+  const getTotalForHoles = (card, holeList) => {
+    if (!Array.isArray(holeList) || holeList.length === 0) {
+      return "-";
+    }
+    if (viewMode === "gross") {
+      return (
+        holeList.reduce((sum, hole) => {
+          const entry = card.holes?.find((item) => item.hole === hole);
+          return sum + (entry?.strokes || 0);
+        }, 0) || "-"
+      );
+    }
+    const holesCount = round?.holes || 18;
+    const handicaps = getHoleHandicapsForCard(card);
+    const strokesMap = buildStrokesMap(
+      card.player?.handicap || 0,
+      handicaps,
+      holesCount
+    );
+    return (
+      holeList.reduce((sum, hole) => {
+        const entry = card.holes?.find((item) => item.hole === hole);
+        const strokes = entry?.strokes || 0;
+        return sum + (strokes - (strokesMap[hole] || 0));
+      }, 0) || "-"
+    );
+  };
 
   const handleJoin = async () => {
     if (!me?._id || !params?.id) {
@@ -206,52 +409,384 @@ export default function RoundDetailPage() {
     }
   };
 
+  const handleAccept = async (scorecardId) => {
+    if (!params?.id) {
+      return;
+    }
+    const res = await fetch(
+      `/api/rounds/${params.id}/scorecards/${scorecardId}/accept`,
+      { method: "POST" }
+    );
+    if (!res.ok) {
+      notifications.show({
+        title: "No se pudo aceptar",
+        message: "Intenta de nuevo.",
+        color: "clay",
+      });
+      return;
+    }
+    notifications.show({
+      title: "Tarjeta aceptada",
+      message: "Se bloqueo la edicion.",
+      color: "club",
+    });
+    loadScorecards();
+    const socket = getSocket();
+    socket.emit("scorecard:update", {
+      roundId: params.id,
+      payload: { scorecardId },
+    });
+  };
+
+  const handleSettle = async () => {
+    if (!params?.id) {
+      return;
+    }
+    setSettling(true);
+    try {
+      const res = await fetch(`/api/rounds/${params.id}/settle`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo cerrar la jugada.");
+      }
+      setSummary(data);
+      if (Array.isArray(data.payments)) {
+        setOptimizedTransfers(minimizeTransfers(data.payments));
+      }
+      notifications.show({
+        title: "Pagos calculados",
+        message: "",
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "Error al calcular",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setSettling(false);
+    }
+  };
+
+  const handleClose = async () => {
+    if (!params?.id) {
+      return;
+    }
+    setClosing(true);
+    try {
+      const res = await fetch(`/api/rounds/${params.id}/close`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo cerrar la jugada.");
+      }
+      if (Array.isArray(data.optimizedTransfers)) {
+        setOptimizedTransfers(data.optimizedTransfers);
+      }
+      notifications.show({
+        title: "Jugada cerrada",
+        message: "Tarjetas bloqueadas.",
+        color: "club",
+      });
+      const updated = await fetch(`/api/rounds/${params.id}`).then((r) =>
+        r.json()
+      );
+      setRound(updated);
+    } catch (error) {
+      notifications.show({
+        title: "Error al cerrar",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const minimizeTransfers = (payments) => {
+    const summaryMap = {};
+    payments.forEach((payment) => {
+      const from = String(payment.from);
+      const to = String(payment.to);
+      summaryMap[from] = (summaryMap[from] || 0) - payment.amount;
+      summaryMap[to] = (summaryMap[to] || 0) + payment.amount;
+    });
+
+    const debtors = [];
+    const creditors = [];
+    Object.entries(summaryMap).forEach(([playerId, amount]) => {
+      if (amount < 0) {
+        debtors.push({ playerId, amount: Math.abs(amount) });
+      } else if (amount > 0) {
+        creditors.push({ playerId, amount });
+      }
+    });
+
+    const transfers = [];
+    let i = 0;
+    let j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const pay = Math.min(debtors[i].amount, creditors[j].amount);
+      if (pay > 0) {
+        transfers.push({
+          from: debtors[i].playerId,
+          to: creditors[j].playerId,
+          amount: pay,
+        });
+        debtors[i].amount -= pay;
+        creditors[j].amount -= pay;
+      }
+      if (debtors[i].amount === 0) i += 1;
+      if (creditors[j].amount === 0) j += 1;
+    }
+    return transfers;
+  };
+
+  const isCardComplete = (card) => {
+    if (!round?.holes) {
+      return false;
+    }
+    for (let i = 1; i <= round.holes; i += 1) {
+      const entry = card.holes?.find((hole) => hole.hole === i);
+      if (entry?.strokes == null || entry.strokes === "") {
+        return false;
+      }
+    }
+    return true;
+  };
+
   return (
     <main>
-      <AppShell
-        title="Jugada activa"
-        subtitle={loading ? "Cargando..." : "Ronda en curso."}
-      >
+      <AppShell title="Jugada activa" subtitle={loading ? "Cargando..." : ""}>
         <Card mb="lg">
-          <Group justify="space-between" mb="sm">
-            <Text fw={700}>{courseName}</Text>
-            <Text size="sm" c="dusk.6">
-              {round?.holes || "--"} hoyos · tee por jugador
-            </Text>
+          <Group justify="space-between">
+            <div>
+              <Text fw={700}>{courseName}</Text>
+            </div>
+            <Group>
+              {isJoined && !isClosed ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  component="a"
+                  href={`/rounds/${params?.id}/record`}
+                >
+                  Editar tarjeta
+                </Button>
+              ) : null}
+              {canApprove && !isClosed ? (
+                <Button
+                  size="xs"
+                  color="club"
+                  onClick={handleSettle}
+                  loading={settling}
+                >
+                  Calcular pagos
+                </Button>
+              ) : null}
+              {canApprove && !isClosed ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={handleClose}
+                  loading={closing}
+                  disabled={!allAccepted}
+                >
+                  Cerrar jugada
+                </Button>
+              ) : null}
+              {/* <Badge color={isClosed ? "dusk" : "club"}>
+                {isClosed ? "Cerrada" : "En juego"}
+              </Badge> */}
+            </Group>
           </Group>
-          <Text size="sm" c="dusk.6">
-            Supervisa: {round?.supervisor?.name || "Por asignar"}
-          </Text>
-          <Text size="sm" c="dusk.6">
-            Valida tarjetas y comparte el marcador en tiempo real.
-          </Text>
-          <Group mt="md">
-            <Button
-              component={Link}
-              href={`/rounds/${params?.id}/scorecard`}
-              color="club"
-            >
-              Ver tarjeta
-            </Button>
-            {isJoined ? (
-              <Button
-                variant="light"
-                component={Link}
-                href={`/rounds/${params?.id}/record`}
-              >
-                Registrar mi tarjeta
-              </Button>
-            ) : null}
-            {!isJoined ? (
-              <Button variant="light" onClick={handleJoin} loading={joining}>
+        </Card>
+
+        <Card>
+          <Group justify="space-between" mb="sm">
+            <Text fw={700}>Tarjeta</Text>
+            <Select
+              size="xs"
+              data={[
+                { value: "gross", label: "Gross" },
+                { value: "net", label: "Net" },
+              ]}
+              value={viewMode}
+              onChange={setViewMode}
+            />
+          </Group>
+          <div className="gml-table-scroll">
+            <Table withTableBorder withColumnBorders highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th className="gml-sticky-col">Jugador</Table.Th>
+                  {holes.map((hole) => (
+                    <Table.Th key={hole}>{hole}</Table.Th>
+                  ))}
+                  <Table.Th>V1</Table.Th>
+                  <Table.Th>V2</Table.Th>
+                  <Table.Th>Total</Table.Th>
+                  <Table.Th>Putts</Table.Th>
+                  <Table.Th>Estado</Table.Th>
+                  {canApprove ? <Table.Th>Accion</Table.Th> : null}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {scorecards.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={holes.length + 6 + (canApprove ? 1 : 0)}>
+                      <Text size="sm" c="dusk.6">
+                        Aun no hay tarjetas registradas.
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  scorecards.map((card) => (
+                    <Table.Tr key={card._id}>
+                      <Table.Td className="gml-sticky-col">
+                        {card.player?.name || "Jugador"}
+                      </Table.Td>
+                      {holes.map((hole) => {
+                        const entry = card.holes?.find(
+                          (item) => item.hole === hole
+                        );
+                        const strokes = entry?.strokes ?? "-";
+                        const putts = entry?.putts;
+                        const ohYes = entry?.ohYes;
+                        const sandy = entry?.sandy;
+                        const wet = entry?.water;
+                        const playerId = card.player?._id?.toString();
+                        const isWinningCell = Boolean(
+                          playerId && winningCells[playerId]?.has(hole)
+                        );
+                        return (
+                          <Table.Td
+                            key={hole}
+                            className={
+                              isWinningCell ? "gml-win-cell" : undefined
+                            }
+                          >
+                            {strokes}
+                            {putts != null ? ` (${putts})` : ""}
+                            {ohYes ? " · OY" : ""}
+                            {sandy ? " · S" : ""}
+                            {wet ? " · W" : ""}
+                          </Table.Td>
+                        );
+                      })}
+                      <Table.Td
+                        className={
+                          card.player?._id &&
+                          winningTotals[String(card.player._id)]?.has(
+                            "medalFront"
+                          )
+                            ? "gml-win-cell"
+                            : undefined
+                        }
+                      >
+                        {getTotalForHoles(card, frontHoles)}
+                      </Table.Td>
+                      <Table.Td
+                        className={
+                          card.player?._id &&
+                          winningTotals[String(card.player._id)]?.has(
+                            "medalBack"
+                          )
+                            ? "gml-win-cell"
+                            : undefined
+                        }
+                      >
+                        {getTotalForHoles(card, backHoles)}
+                      </Table.Td>
+                      <Table.Td
+                        className={
+                          card.player?._id &&
+                          winningTotals[String(card.player._id)]?.has("match")
+                            ? "gml-win-cell"
+                            : undefined
+                        }
+                      >
+                        {viewMode === "net"
+                          ? card.netTotal ?? "-"
+                          : card.grossTotal ?? "-"}
+                      </Table.Td>
+                      <Table.Td>{card.puttsTotal ?? "-"}</Table.Td>
+                      <Table.Td>
+                        <Badge
+                          color={card.accepted ? "club" : "dusk"}
+                          variant="light"
+                        >
+                          {card.accepted ? "Aceptada" : "Pendiente"}
+                        </Badge>
+                      </Table.Td>
+                      {canApprove ? (
+                        <Table.Td>
+                          <Group gap="xs">
+                            <Button
+                              size="xs"
+                              variant="light"
+                              component="a"
+                              href={`/rounds/${params?.id}/record?playerId=${card.player?._id}`}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              onClick={() => handleAccept(card._id)}
+                              disabled={card.accepted || !isCardComplete(card)}
+                            >
+                              {card.accepted ? "Listo" : "Aceptar"}
+                            </Button>
+                          </Group>
+                        </Table.Td>
+                      ) : null}
+                    </Table.Tr>
+                  ))
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
+        </Card>
+
+        <Card mt="lg">
+          <Group justify="space-between" mb="sm">
+            <Text fw={700}>Castigos</Text>
+          </Group>
+          {penaltyFeed.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              Sin castigos registrados.
+            </Text>
+          ) : (
+            penaltyFeed.map((item) => (
+              <Group key={`${item.player}-${item.hole}`} mb="sm">
+                <Badge color="dusk" variant="light">
+                  Hoyo {item.hole}
+                </Badge>
+                <div>
+                  <Text fw={600}>
+                    {item.player} · {item.penalty}
+                  </Text>
+                </div>
+              </Group>
+            ))
+          )}
+        </Card>
+
+        <Card mt="lg">
+          <Group justify="space-between" mb="sm">
+            <Text fw={700}>Jugadores en la jugada</Text>
+            {!isJoined && !isClosed ? (
+              <Button size="xs" variant="light" onClick={handleJoin} loading={joining}>
                 Unirme
               </Button>
             ) : null}
           </Group>
-        </Card>
-
-        <Card mb="lg">
-          <Text fw={700} mb="sm">
+          <Text size="sm" c="dusk.6" mb="xs">
             Tu tee de salida
           </Text>
           <Select
@@ -259,66 +794,62 @@ export default function RoundDetailPage() {
             data={teeOptions}
             value={joinTee}
             onChange={setJoinTee}
-            disabled={isJoined}
+            disabled={isJoined || isClosed}
           />
           {isJoined ? (
             <Text size="xs" c="dusk.6" mt="xs">
               Ya estas en la jugada.
             </Text>
           ) : null}
-        </Card>
-
-        <Card>
-          <Text fw={700} mb="sm">
-            Jugadores en la jugada
-          </Text>
-          {players.length === 0 ? (
-            <Text size="sm" c="dusk.6">
-              Aun no hay jugadores registrados.
-            </Text>
-          ) : (
-            players.map((player) => (
-              <Group key={player._id} justify="space-between" mb="sm">
-                <div>
-                  <Text fw={600}>{player.name}</Text>
-                  <Text size="sm" c="dusk.6">
-                    HC {player.handicap ?? 0}
-                  </Text>
-                </div>
-                {canManage ? (
-                  <Group>
-                    <Select
-                      data={teeOptions}
-                      value={
-                        playerTees.find(
-                          (entry) =>
-                            String(entry.player) === String(player._id)
-                        )?.teeName || ""
-                      }
-                      onChange={(value) => handleUpdateTee(player._id, value)}
-                      placeholder="Sin tee"
-                      disabled={updatingTee === player._id || isClosed}
-                    />
-                    <Button
-                      size="xs"
-                      variant="light"
-                      component={Link}
-                      href={`/rounds/${params?.id}/record?playerId=${player._id}`}
-                      disabled={isClosed}
-                    >
-                      Editar tarjeta
-                    </Button>
-                  </Group>
-                ) : (
-                  <Text size="sm" c="dusk.6">
-                    {playerTees.find(
-                      (entry) => String(entry.player) === String(player._id)
-                    )?.teeName || "Sin tee"}
-                  </Text>
-                )}
-              </Group>
-            ))
-          )}
+          <div style={{ marginTop: "1rem" }}>
+            {players.length === 0 ? (
+              <Text size="sm" c="dusk.6">
+                Aun no hay jugadores registrados.
+              </Text>
+            ) : (
+              players.map((player) => (
+                <Group key={player._id} justify="space-between" mb="sm">
+                  <div>
+                    <Text fw={600}>{player.name}</Text>
+                    <Text size="sm" c="dusk.6">
+                      HC {player.handicap ?? 0}
+                    </Text>
+                  </div>
+                  {canManage ? (
+                    <Group>
+                      <Select
+                        data={teeOptions}
+                        value={
+                          playerTees.find(
+                            (entry) =>
+                              String(entry.player) === String(player._id)
+                          )?.teeName || ""
+                        }
+                        onChange={(value) => handleUpdateTee(player._id, value)}
+                        placeholder="Sin tee"
+                        disabled={updatingTee === player._id || isClosed}
+                      />
+                      <Button
+                        size="xs"
+                        variant="light"
+                        component={Link}
+                        href={`/rounds/${params?.id}/record?playerId=${player._id}`}
+                        disabled={isClosed}
+                      >
+                        Editar tarjeta
+                      </Button>
+                    </Group>
+                  ) : (
+                    <Text size="sm" c="dusk.6">
+                      {playerTees.find(
+                        (entry) => String(entry.player) === String(player._id)
+                      )?.teeName || "Sin tee"}
+                    </Text>
+                  )}
+                </Group>
+              ))
+            )}
+          </div>
         </Card>
 
         <Card mt="lg">
@@ -338,6 +869,111 @@ export default function RoundDetailPage() {
                 </Text>
               </Group>
             ))
+          )}
+        </Card>
+
+        <Card mt="lg">
+          <Group justify="space-between" mb="sm">
+            <Text fw={700}>Resumen de pagos</Text>
+          </Group>
+          {!summary || !summary.summary ? (
+            <Text size="sm" c="dusk.6">
+              Calcula pagos para ver el resumen final.
+            </Text>
+          ) : (
+            <Accordion variant="separated">
+              {scorecards.map((card) => {
+                const playerId = card.player?._id?.toString();
+                const value = summary.summary?.[playerId] || 0;
+                const items = (summary.payments || []).filter(
+                  (payment) =>
+                    String(payment.from) === playerId ||
+                    String(payment.to) === playerId
+                );
+                return (
+                  <Accordion.Item key={card._id} value={card._id}>
+                    <Accordion.Control>
+                      <Group justify="space-between">
+                        <Text fw={600}>{card.player?.name || "Jugador"}</Text>
+                        <Text size="sm" c={value >= 0 ? "club.7" : "clay.7"}>
+                          {value >= 0 ? "+" : "-"}${Math.abs(value)}
+                        </Text>
+                      </Group>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      {items.length === 0 ? (
+                        <Text size="sm" c="dusk.6">
+                          Sin movimientos registrados.
+                        </Text>
+                      ) : (
+                        items.map((payment, idx) => {
+                          const isWin = String(payment.to) === playerId;
+                          const rivalId = isWin
+                            ? String(payment.from)
+                            : String(payment.to);
+                          const rival = scorecards.find(
+                            (card) => String(card.player?._id) === rivalId
+                          );
+                          const label =
+                            ITEM_LABELS[payment.item] || payment.item;
+                          return (
+                            <Group key={`${card._id}-${idx}`} mb="xs">
+                              <Badge
+                                color={isWin ? "club" : "clay"}
+                                variant="light"
+                              >
+                                {isWin ? "Gana" : "Paga"}
+                              </Badge>
+                              <Text size="sm">
+                                {label}
+                                {payment.hole ? ` · Hoyo ${payment.hole}` : ""}
+                                {rival ? ` · vs ${rival.player?.name}` : ""}
+                              </Text>
+                              <Text
+                                size="sm"
+                                c={isWin ? "club.7" : "clay.7"}
+                              >
+                                {isWin ? "+" : "-"}${payment.amount}
+                              </Text>
+                            </Group>
+                          );
+                        })
+                      )}
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                );
+              })}
+            </Accordion>
+          )}
+        </Card>
+
+        <Card mt="lg">
+          <Group justify="space-between" mb="sm">
+            <Text fw={700}>Transacciones optimizadas</Text>
+          </Group>
+          {optimizedTransfers.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              No hay transacciones optimizadas para mostrar.
+            </Text>
+          ) : (
+            optimizedTransfers.map((transfer, idx) => {
+              const fromPlayer = scorecards.find(
+                (card) => String(card.player?._id) === String(transfer.from)
+              )?.player?.name;
+              const toPlayer = scorecards.find(
+                (card) => String(card.player?._id) === String(transfer.to)
+              )?.player?.name;
+              return (
+                <Group key={`${transfer.from}-${transfer.to}-${idx}`} mb="xs">
+                  <Text size="sm" fw={600}>
+                    {fromPlayer || "Jugador"} → {toPlayer || "Jugador"}
+                  </Text>
+                  <Badge color="clay" variant="light">
+                    ${transfer.amount}
+                  </Badge>
+                </Group>
+              );
+            })
           )}
         </Card>
       </AppShell>

@@ -8,7 +8,6 @@ import {
   Card,
   Group,
   MultiSelect,
-  NumberInput,
   Text,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -195,7 +194,7 @@ export default function RecordScorecardPage() {
 
   const title = useMemo(() => {
     if (!round?.courseSnapshot) return "Registro de tarjeta";
-    return `${round.courseSnapshot.clubName} · ${round.courseSnapshot.courseName}`;
+    return `${round.courseSnapshot.clubName}`;
   }, [round]);
 
   const activePlayerName = useMemo(() => {
@@ -238,8 +237,14 @@ export default function RecordScorecardPage() {
           nextPutts === 0 &&
           nextStrokes != null &&
           nextStrokes <= par;
-        const penalties = Array.isArray(hole.penalties)
-          ? hole.penalties.filter(
+        const basePenalties = Object.prototype.hasOwnProperty.call(
+          patch,
+          "penalties"
+        )
+          ? patch.penalties
+          : hole.penalties;
+        const penalties = Array.isArray(basePenalties)
+          ? basePenalties.filter(
               (penalty) => !["cuatriputt", "nerdina"].includes(penalty)
             )
           : [];
@@ -277,8 +282,14 @@ export default function RecordScorecardPage() {
     updateHole(index, { strokes: value });
   };
 
-  const applyPuttPreset = (index) => {
-    updateHole(index, { putts: 3 });
+  const applyPuttPreset = (index, value) => {
+    updateHole(index, { putts: value });
+  };
+
+  const updateNumber = (index, key, delta) => {
+    const current = Number(holes[index]?.[key] ?? 0);
+    const next = Math.max(0, current + delta);
+    updateHole(index, { [key]: next });
   };
 
   const handleSave = async () => {
@@ -406,12 +417,12 @@ export default function RecordScorecardPage() {
             ? `Tarjeta de ${activePlayerName || "jugador"}`
             : "Registro de tarjeta"
         }
-        subtitle={round ? "Captura tus golpes por hoyo." : "Cargando..."}
+        // subtitle={round ? "Captura tus golpes por hoyo." : "Cargando..."}
       >
         <Card mb="lg">
           <Group justify="space-between">
             <Text fw={700}>{title}</Text>
-            <Badge color="club">{round?.holes || "--"} hoyos</Badge>
+            {/* <Badge color="club">{round?.holes || "--"} hoyos</Badge> */}
           </Group>
           <Text size="sm" c="dusk.6">
             {activePlayerId && String(activePlayerId) !== String(me?._id)
@@ -446,15 +457,15 @@ export default function RecordScorecardPage() {
           <Card key={hole.hole} mb="sm">
             <Group justify="space-between" mb="xs">
               <Text fw={700}>Hoyo {hole.hole}</Text>
-              <Badge color="dusk" variant="light">
+              {/* <Badge color="dusk" variant="light">
                 Captura
-              </Badge>
+              </Badge> */}
+              <Text size="sm" c="dusk.6" mb="sm">
+                Par {holeMeta[hole.hole]?.par ?? "--"} ·{" "}
+                {holeMeta[hole.hole]?.yardage ?? "--"} yds · Ventaja {" "}
+                {holeMeta[hole.hole]?.handicap ?? "--"}
+              </Text>
             </Group>
-            <Text size="sm" c="dusk.6" mb="sm">
-              Par {holeMeta[hole.hole]?.par ?? "--"} ·{" "}
-              {holeMeta[hole.hole]?.yardage ?? "--"} yds · HC{" "}
-              {holeMeta[hole.hole]?.handicap ?? "--"}
-            </Text>
             <Group gap="xs" mb="sm">
               <Button
                 size="xs"
@@ -493,7 +504,31 @@ export default function RecordScorecardPage() {
               <Button
                 size="xs"
                 variant="light"
-                onClick={() => applyPuttPreset(index)}
+                onClick={() => applyPuttPreset(index, 0)}
+                disabled={locked || roundClosed}
+              >
+                0 putt
+              </Button>
+              <Button
+                size="xs"
+                variant="light"
+                onClick={() => applyPuttPreset(index, 1)}
+                disabled={locked || roundClosed}
+              >
+                1 putt
+              </Button>
+              <Button
+                size="xs"
+                variant="light"
+                onClick={() => applyPuttPreset(index, 2)}
+                disabled={locked || roundClosed}
+              >
+                2 putt
+              </Button>
+              <Button
+                size="xs"
+                variant="light"
+                onClick={() => applyPuttPreset(index, 3)}
                 disabled={locked || roundClosed}
               >
                 3 putt
@@ -529,32 +564,67 @@ export default function RecordScorecardPage() {
               </Button>
             </Group>
             <Group grow align="flex-start">
-              <NumberInput
-                label="Golpes"
-                placeholder="0"
-                value={hole.strokes}
-                min={0}
-                onChange={(value) => updateHole(index, { strokes: value })}
-                disabled={locked || roundClosed}
-              />
-              <NumberInput
-                label="Putts"
-                placeholder="0"
-                value={hole.putts}
-                min={0}
-                onChange={(value) => updateHole(index, { putts: value })}
-                disabled={locked || roundClosed}
-              />
-              <MultiSelect
-                label="Castigos"
-                data={PENALTIES}
-                value={hole.penalties}
-                onChange={(value) => updateHole(index, { penalties: value })}
-                placeholder="Selecciona"
-                clearable
-                disabled={locked || roundClosed}
-              />
+              <div className="gml-stepper">
+                <Text size="sm" fw={600}>
+                  Golpes
+                </Text>
+                <div className="gml-stepper-controls">
+                  <Button
+                    variant="light"
+                    onClick={() => updateNumber(index, "strokes", -1)}
+                    disabled={locked || roundClosed}
+                  >
+                    -
+                  </Button>
+                  <Text fw={700} className="gml-stepper-value">
+                    {hole.strokes === "" || hole.strokes == null
+                      ? "-"
+                      : hole.strokes}
+                  </Text>
+                  <Button
+                    variant="light"
+                    onClick={() => updateNumber(index, "strokes", 1)}
+                    disabled={locked || roundClosed}
+                  >
+                    +
+                  </Button>
+                </div>
+              </div>
+              <div className="gml-stepper">
+                <Text size="sm" fw={600}>
+                  Putts
+                </Text>
+                <div className="gml-stepper-controls">
+                  <Button
+                    variant="light"
+                    onClick={() => updateNumber(index, "putts", -1)}
+                    disabled={locked || roundClosed}
+                  >
+                    -
+                  </Button>
+                  <Text fw={700} className="gml-stepper-value">
+                    {hole.putts === "" || hole.putts == null ? "-" : hole.putts}
+                  </Text>
+                  <Button
+                    variant="light"
+                    onClick={() => updateNumber(index, "putts", 1)}
+                    disabled={locked || roundClosed}
+                  >
+                    +
+                  </Button>
+                </div>
+              </div>
             </Group>
+            <MultiSelect
+              label="Castigos"
+              data={PENALTIES}
+              value={hole.penalties}
+              onChange={(value) => updateHole(index, { penalties: value })}
+              placeholder="Selecciona"
+              clearable
+              disabled={locked || roundClosed}
+              mt="sm"
+            />
           </Card>
         ))}
 

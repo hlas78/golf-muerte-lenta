@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -28,6 +28,7 @@ export default function UsersPage() {
     password: "",
   });
   const [saving, setSaving] = useState(false);
+  const nameInputRef = useRef(null);
 
   const loadUsers = () => {
     setLoading(true);
@@ -65,6 +66,9 @@ export default function UsersPage() {
       role: user.role || "player",
       password: "",
     });
+    setTimeout(() => {
+      nameInputRef.current?.focus();
+    }, 0);
   };
 
   const updateForm = (patch) => {
@@ -127,7 +131,7 @@ export default function UsersPage() {
 
   return (
     <main>
-      <AppShell title="Usuarios" subtitle="Altas, bajas y roles.">
+      <AppShell title="Usuarios">
         <Card mb="lg">
           <Group justify="space-between" mb="sm">
             <Text fw={700}>
@@ -171,6 +175,7 @@ export default function UsersPage() {
               onChange={(event) =>
                 updateForm({ name: event.currentTarget.value })
               }
+              ref={nameInputRef}
             />
             <TextInput
               label="Telefono"

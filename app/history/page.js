@@ -106,7 +106,7 @@ export default function HistoryPage() {
               <Card
                 key={round._id}
                 component={Link}
-                href={`/rounds/${round._id}/scorecard`}
+                href={`/rounds/${round._id}`}
                 withBorder
               >
                 <Group justify="space-between" mb="xs">
@@ -118,8 +118,7 @@ export default function HistoryPage() {
                   </Badge>
                 </Group>
                 <Text size="sm" c="dusk.6">
-                  {round.courseSnapshot?.courseName || "Curso"} · tee por
-                  jugador
+                  {round.courseSnapshot?.courseName || "Curso"}
                 </Text>
                 <Text size="sm" c="dusk.6">
                   {round.holes} hoyos · Jugadores {round.players?.length || 0}

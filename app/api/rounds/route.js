@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { createRequire } from "module";
 import connectDb from "@/lib/db";
 import Round from "@/lib/models/Round";
 import Course from "@/lib/models/Course";
 import Config from "@/lib/models/Config";
 import User from "@/lib/models/User";
+import Scorecard from "@/lib/models/Scorecard";
 import { verifyToken } from "@/lib/auth";
+import { WELCOME_MESSAGES } from "@/lib/welcomeMessages";
+
+const require = createRequire(import.meta.url);
+const { sendMessage } = require("@/scripts/sendMessage");
 
 async function getConfigSnapshot() {
   let config = await Config.findOne({ key: "global" });
@@ -52,6 +58,54 @@ export async function POST(request) {
     description: payload.description || "",
     configSnapshot: config.bets,
   });
+
+  const playerIds = Array.isArray(payload.players)
+    ? Array.from(new Set(payload.players.map(String)))
+    : [];
+  if (playerIds.length > 0) {
+    const tees = course?.tees || {};
+    const allTees = [...(tees.male || []), ...(tees.female || [])];
+    const defaultTeeName = allTees[0]?.tee_name || round.teeName || "";
+    round.playerTees = playerIds.map((playerId) => ({
+      player: playerId,
+      teeName: defaultTeeName,
+    }));
+    round.status = "active";
+    await round.save();
+
+    await Scorecard.insertMany(
+      playerIds.map((playerId) => ({
+        round: round._id,
+        player: playerId,
+        teeName: defaultTeeName,
+        holes: Array.from({ length: round.holes }, (_, idx) => ({
+          hole: idx + 1,
+          strokes: null,
+          putts: null,
+          ohYes: false,
+          sandy: false,
+          penalties: [],
+          bunker: false,
+          water: false,
+          holeOut: false,
+        })),
+      }))
+    );
+
+    const participants = await User.find({ _id: { $in: playerIds } });
+    const campo =
+      round.courseSnapshot?.clubName ||
+      round.courseSnapshot?.courseName ||
+      "el campo";
+    await Promise.allSettled(
+      participants.map((player) => {
+        const template =
+          WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+        const message = template.replace("{campo}", campo);
+        return sendMessage(player.phone, message);
+      })
+    );
+  }
 
   return NextResponse.json({ id: round._id });
 }

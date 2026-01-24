@@ -60,12 +60,12 @@ export default function Home() {
         showAdminNav={isAdmin}
         showGreetingAsTitle
       >
-        <section className="gml-hero">
+        {/* <section className="gml-hero">
           <div className="gml-badge">Golf</div>
           <h1>Muerte Lenta</h1>
           <p>¡A jugar!
           </p>
-          {/* <Group>
+          {<Group>
             <Button component={Link} href="/login" color="clay">
               Ingresar
             </Button>
@@ -79,12 +79,12 @@ export default function Home() {
                 Aprobar usuarios
               </Button>
             ) : null}
-          </Group> */}
-        </section>
+          </Group> }
+        </section> */}
 
         <section style={{ marginTop: "2rem" }}>
           <Group justify="space-between" mb="md">
-            <Text fw={700}>Jugadas abiertas</Text>
+            <Text fw={700} c="club.7">Jugadas abiertas</Text>
             <Text size="sm" c="dusk.6">
               {openRounds.length} activas
             </Text>
@@ -104,21 +104,17 @@ export default function Home() {
                 >
                   <Group justify="space-between" mb="xs">
                     <Text fw={700}>
-                      {round.courseSnapshot?.clubName || "Campo"}
+                      {round.courseSnapshot?.clubName || "Campo"} - {round.holes} hoyos
                     </Text>
-                    <Badge color={round.status === "active" ? "club" : "dusk"}>
+                    {/* <Badge color={round.status === "active" ? "club" : "dusk"}>
                       {round.status === "active" ? "Activa" : "Abierta"}
-                    </Badge>
+                    </Badge> */}
                   </Group>
+                  {/* <Text size="sm" c="dusk.6">
+                    {round.courseSnapshot?.courseName || "Curso"}
+                  </Text> */}
                   <Text size="sm" c="dusk.6">
-                    {round.courseSnapshot?.courseName || "Curso"} · tee por
-                    jugador
-                  </Text>
-                  <Text size="sm" c="dusk.6">
-                    {round.holes} hoyos · Jugadores {round.players?.length || 0}
-                  </Text>
-                  <Text size="sm" c="dusk.6">
-                    {round.players?.length
+                    Jugadores: {round.players?.length
                       ? round.players
                           .map((player) => player?.name)
                           .filter(Boolean)
@@ -131,11 +127,11 @@ export default function Home() {
                     </Text>
                   ) : null}
                   <Text size="sm" c="dusk.6">
-                    {formatRoundDate(round.createdAt)}
+                    Inicio: {formatRoundDate(round.createdAt)}
                   </Text>
-                  <Text size="sm" c="dusk.6">
+                  {/* <Text size="sm" c="dusk.6">
                     Supervisa: {round.supervisor?.name || "Por asignar"}
-                  </Text>
+                  </Text> */}
                 </Card>
               ))
             )}
@@ -144,7 +140,7 @@ export default function Home() {
 
         <section style={{ marginTop: "2rem" }}>
           <Group justify="space-between" mb="md">
-            <Text fw={700}>Jugadas cerradas</Text>
+            <Text fw={700} c="clay.7">Jugadas cerradas</Text>
             <Text size="sm" c="dusk.6">
               {closedRounds.length} cerradas
             </Text>
@@ -159,7 +155,7 @@ export default function Home() {
                 <Card
                   key={round._id}
                   component={Link}
-                  href={`/rounds/${round._id}/scorecard`}
+                  href={`/rounds/${round._id}`}
                   withBorder
                 >
                   <Group justify="space-between" mb="xs">
@@ -171,8 +167,7 @@ export default function Home() {
                     </Badge>
                   </Group>
                   <Text size="sm" c="dusk.6">
-                    {round.courseSnapshot?.courseName || "Curso"} · tee por
-                    jugador
+                    {round.courseSnapshot?.courseName || "Curso"}
                   </Text>
                   <Text size="sm" c="dusk.6">
                     {round.holes} hoyos · Jugadores {round.players?.length || 0}

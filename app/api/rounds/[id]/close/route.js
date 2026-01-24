@@ -293,6 +293,7 @@ export async function POST(request, { params }) {
     ...(transfersLines.length ? transfersLines : ["- Sin movimientos"]),
   ].join("\n");
 
+  console.log('Inicia mensajes de pagos')
   await Promise.allSettled(
     participants.map((player) => sendMessage(player.phone, whatsappMessage))
   );
