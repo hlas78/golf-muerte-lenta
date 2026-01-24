@@ -51,7 +51,7 @@ export async function POST(request) {
     : 0;
   const now = Date.now();
 
-  if (user.magicToken && now - lastSentAt < oneHourMs) {
+  if (!existingUser && user.magicToken && now - lastSentAt < oneHourMs) {
     return NextResponse.json(
       { error: "Solo puedes solicitar una liga por hora." },
       { status: 429 }
