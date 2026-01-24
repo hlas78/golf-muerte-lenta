@@ -154,9 +154,6 @@ export default function NewRoundPage() {
               minRows={2}
             />
             <Group justify="space-between" mt="md">
-              <Text size="sm" c="dusk.6">
-                La configuracion de apuestas se toma del admin.
-              </Text>
               <Button color="club" type="submit" loading={loading}>
                 Abrir jugada
               </Button>

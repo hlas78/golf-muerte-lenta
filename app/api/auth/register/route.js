@@ -27,6 +27,7 @@ export async function POST(request) {
   }
 
   let user = await User.findOne({ phone });
+  const existingUser = Boolean(user);
   if (!user) {
     user = await User.create({
       name: name || `Jugador ${phone.slice(-4)}`,
@@ -64,12 +65,20 @@ export async function POST(request) {
   await user.save();
 
   const link = buildMagicLink(user.magicToken);
-  await sendMessage(
-    phone,
-    `¡Hola ${name || user.name} 👋! \n\nGracias por solicitar tu acceso a ☠️ La Muerte Lenta ☠️\n\nEn cuanto la solicitud sea aprobada, recibirás tu acceso. Agrega el contacto que te voy a enviar a continuación para facilitar el proceso de alta`
-  );
+  if (existingUser) {
+    await sendMessage(
+      phone,
+      `¡Hola ${name || user.name} 👋! \n\nYa estás registrado en ☠️ La Muerte Lenta ☠️.\nAquí tienes tu liga de acceso: \n${link}\n\nSi aún estás en revisión, en cuanto te aprueben podrás entrar.`
+    );
+  } else {
+    await sendMessage(
+      phone,
+      `¡Hola ${name || user.name} 👋! \n\nGracias por solicitar tu acceso a ☠️ La Muerte Lenta ☠️\n\nEn cuanto la solicitud sea aprobada, recibirás tu acceso. Agrega el contacto que te voy a enviar a continuación para facilitar el proceso de alta`
+    );
+    sendMessage(phone, 'BEGIN:VCARD\nVERSION:3.0\nN:Avisos;Muerte Lenta;;;\nFN:Avisos Muerte Lenta\nTEL;type=CELL;type=VOICE;waid=5215530967255:+525530967255\nEND:VCARD');
+
+  }
   
-  sendMessage(phone, 'BEGIN:VCARD\nVERSION:3.0\nN:Avisos;Muerte Lenta;;;\nFN:Avisos Muerte Lenta\nTEL;type=CELL;type=VOICE;waid=5215530967255:+525530967255\nEND:VCARD');
 
   return NextResponse.json({ ok: true });
 }
