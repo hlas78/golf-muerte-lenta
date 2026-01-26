@@ -137,10 +137,10 @@ async function run() {
     (await prompt({ label: "Password: ", masked: true }));
   await connectDb();
 
-  const users = [await User.findOne({
+  const users = await User.find({
     grintId: { $exists: true, $ne: "" },
     active: true,
-  })];
+  });
   if (!users.length) {
     console.log("No hay usuarios con ID Grint.");
     return;
