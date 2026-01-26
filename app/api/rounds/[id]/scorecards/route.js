@@ -47,9 +47,7 @@ export async function POST(request, { params }) {
   if (!authUser) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const isSupervisor =
-    authUser.role === "admin" ||
-    String(round.supervisor) === String(authUser._id);
+  const isSupervisor = authUser.role === "admin" || authUser.role === "supervisor";
   if (!isSupervisor && String(payload.playerId) !== String(authPayload.id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -155,8 +155,7 @@ export default function RecordScorecardPage() {
     if (
       paramPlayerId &&
       me?._id &&
-      role !== "admin" &&
-      String(round?.supervisor) !== String(me._id)
+      !["admin", "supervisor"].includes(role)
     ) {
       router.replace(`/rounds/${params.id}`);
       return;

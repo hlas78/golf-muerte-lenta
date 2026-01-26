@@ -190,9 +190,7 @@ export async function POST(request, { params }) {
   if (round.status === "closed") {
     return NextResponse.json({ error: "Round closed" }, { status: 400 });
   }
-  const isSupervisor =
-    actor.role === "admin" ||
-    String(round.supervisor) === String(actor._id);
+  const isSupervisor = actor.role === "admin" || actor.role === "supervisor";
   if (!isSupervisor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

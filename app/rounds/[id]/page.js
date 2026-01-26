@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Accordion,
   Badge,
@@ -58,11 +58,14 @@ export default function RoundDetailPage() {
   const [allAccepted, setAllAccepted] = useState(false);
   const [closing, setClosing] = useState(false);
   const [optimizedTransfers, setOptimizedTransfers] = useState([]);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const holes = useMemo(
     () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
     [round]
   );
+  const router = useRouter();
   const frontHoles = useMemo(() => holes.slice(0, 9), [holes]);
   const backHoles = useMemo(() => holes.slice(9, 18), [holes]);
   const holeMeta = useMemo(() => {
@@ -180,11 +183,10 @@ export default function RoundDetailPage() {
       ),
     [me, players]
   );
-  const canManage =
-    me?.role === "admin" ||
-    (me?._id && String(round?.supervisor?._id) === String(me._id));
+  const canManage = me?.role === "admin" || me?.role === "supervisor";
   const canApprove = canManage;
   const isClosed = round?.status === "closed";
+  const isAdmin = me?.role === "admin";
 
   const teeOptions = useMemo(() => {
     const tees = round?.courseSnapshot?.tees;
@@ -387,14 +389,6 @@ export default function RoundDetailPage() {
       notifications.show({
         title: "Handicap requerido",
         message: "Actualiza tu handicap para unirte.",
-        color: "clay",
-      });
-      return;
-    }
-    if (!joinTee) {
-      notifications.show({
-        title: "Selecciona tee",
-        message: "Elige tu tee de salida.",
         color: "clay",
       });
       return;
@@ -616,15 +610,69 @@ export default function RoundDetailPage() {
     return true;
   };
 
+  const handleDeleteRound = async () => {
+    if (!round?._id) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/rounds/${round._id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo eliminar la jugada.");
+      }
+      router.push("/");
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo eliminar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
+    }
+  };
+
   return (
     <main>
       <AppShell title="Jugada activa" subtitle={loading ? "Cargando..." : ""}>
+        <Modal
+          opened={deleteOpen}
+          onClose={() => setDeleteOpen(false)}
+          title="Eliminar jugada"
+        >
+          <Text size="sm" c="dusk.6" mb="md">
+            Esto elimina la jugada, sus tarjetas y pagos. Esta accion no se puede
+            deshacer.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setDeleteOpen(false)}>
+              Cancelar
+            </Button>
+            <Button color="clay" onClick={handleDeleteRound} loading={deleting}>
+              Eliminar
+            </Button>
+          </Group>
+        </Modal>
         <Card mb="lg">
           <Group justify="space-between">
             <div>
               <Text fw={700}>{courseName}</Text>
             </div>
             <Group>
+              {!isJoined && !isClosed ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={handleJoin}
+                  loading={joining}
+                >
+                  Unirme
+                </Button>
+              ) : null}
               {isJoined && !isClosed ? (
                 <Button
                   size="xs"
@@ -664,6 +712,16 @@ export default function RoundDetailPage() {
                   disabled={!allAccepted}
                 >
                   Cerrar jugada
+                </Button>
+              ) : null}
+              {isAdmin ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="clay"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  Eliminar
                 </Button>
               ) : null}
               {/* <Badge color={isClosed ? "dusk" : "club"}>
@@ -876,80 +934,6 @@ export default function RoundDetailPage() {
           )}
         </Card>
 
-        <Card mt="lg">
-          <Group justify="space-between" mb="sm">
-            <Text fw={700}>Jugadores en la jugada</Text>
-            {!isJoined && !isClosed ? (
-              <Button size="xs" variant="light" onClick={handleJoin} loading={joining}>
-                Unirme
-              </Button>
-            ) : null}
-          </Group>
-          <Text size="sm" c="dusk.6" mb="xs">
-            Tu tee de salida
-          </Text>
-          <Select
-            placeholder="Selecciona tee"
-            data={teeOptions}
-            value={joinTee}
-            onChange={setJoinTee}
-            disabled={isJoined || isClosed}
-          />
-          {isJoined ? (
-            <Text size="xs" c="dusk.6" mt="xs">
-              Ya estas en la jugada.
-            </Text>
-          ) : null}
-          <div style={{ marginTop: "1rem" }}>
-            {players.length === 0 ? (
-              <Text size="sm" c="dusk.6">
-                Aun no hay jugadores registrados.
-              </Text>
-            ) : (
-              players.map((player) => (
-                <Group key={player._id} justify="space-between" mb="sm">
-                  <div>
-                    <Text fw={600}>{player.name}</Text>
-                    <Text size="sm" c="dusk.6">
-                      HC {player.handicap ?? 0}
-                    </Text>
-                  </div>
-                  {canManage ? (
-                    <Group>
-                      <Select
-                        data={teeOptions}
-                        value={
-                          playerTees.find(
-                            (entry) =>
-                              String(entry.player) === String(player._id)
-                          )?.teeName || ""
-                        }
-                        onChange={(value) => handleUpdateTee(player._id, value)}
-                        placeholder="Sin tee"
-                        disabled={updatingTee === player._id || isClosed}
-                      />
-                      <Button
-                        size="xs"
-                        variant="light"
-                        component={Link}
-                        href={`/rounds/${params?.id}/record?playerId=${player._id}`}
-                        disabled={isClosed}
-                      >
-                        Editar tarjeta
-                      </Button>
-                    </Group>
-                  ) : (
-                    <Text size="sm" c="dusk.6">
-                      {playerTees.find(
-                        (entry) => String(entry.player) === String(player._id)
-                      )?.teeName || "Sin tee"}
-                    </Text>
-                  )}
-                </Group>
-              ))
-            )}
-          </div>
-        </Card>
 
         {/* <Card mt="lg">
           <Text fw={700} mb="sm">
@@ -1079,17 +1063,31 @@ export default function RoundDetailPage() {
       <Modal
         opened={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        title="Confirmar union"
+        title="Unirme a la jugada"
         centered
       >
-        <Text size="sm" c="dusk.6" mb="md">
-          Te vas a unir a la jugada en {courseName} con tee {joinTee}. ¿Confirmas?
+        <Text size="sm" c="dusk.6" mb="sm">
+          Selecciona tu tee de salida para {courseName}.
         </Text>
-        <Group justify="flex-end">
+        <Select
+          placeholder="Selecciona tee"
+          data={teeOptions}
+          value={joinTee}
+          onChange={setJoinTee}
+        />
+        <Text size="xs" c="dusk.6" mt="sm">
+          Te vas a unir con tee {joinTee || "-"}.
+        </Text>
+        <Group justify="flex-end" mt="md">
           <Button variant="light" onClick={() => setConfirmOpen(false)}>
             Cancelar
           </Button>
-          <Button color="club" onClick={confirmJoin} loading={joining}>
+          <Button
+            color="club"
+            onClick={confirmJoin}
+            loading={joining}
+            disabled={!joinTee}
+          >
             Confirmar
           </Button>
         </Group>

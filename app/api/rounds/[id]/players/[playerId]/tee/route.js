@@ -23,9 +23,7 @@ export async function PUT(request, { params }) {
   if (!round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
-  const isSupervisor =
-    actor.role === "admin" ||
-    String(round.supervisor) === String(actor._id);
+  const isSupervisor = actor.role === "admin" || actor.role === "supervisor";
   if (!isSupervisor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

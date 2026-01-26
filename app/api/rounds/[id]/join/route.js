@@ -99,7 +99,7 @@ export async function POST(request, { params }) {
     });
     const playerTee =
       round.playerTees?.find(
-        (entry) => String(entry.player) === String(player._id)
+        (entry) => String(entry.player) === String(user._id)
       )?.teeName || teeName;
     const tee =
       allTees.find((option) => option.tee_name === playerTee) || allTees[0];
@@ -124,12 +124,12 @@ export async function POST(request, { params }) {
         : user.handicap || 0;
     const existingCard = await Scorecard.findOne({
       round: round._id,
-      player: player._id,
+      player: user._id,
     });
     if (!existingCard) {
       await Scorecard.create({
         round: round._id,
-        player: player._id,
+        player: user._id,
         teeName: tee?.tee_name || playerTee || "",
         courseHandicap,
         holes: Array.from({ length: round.holes }, (_, idx) => ({

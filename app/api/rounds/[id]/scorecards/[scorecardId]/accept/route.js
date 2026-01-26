@@ -27,9 +27,7 @@ export async function POST(request, { params }) {
   if (round.status === "closed") {
     return NextResponse.json({ error: "Round closed" }, { status: 400 });
   }
-  const isSupervisor =
-    approver.role === "admin" ||
-    String(round.supervisor) === String(approver._id);
+  const isSupervisor = approver.role === "admin" || approver.role === "supervisor";
   if (!isSupervisor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
