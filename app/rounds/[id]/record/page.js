@@ -7,7 +7,10 @@ import {
   Button,
   Card,
   Group,
+  Modal,
+  Stack,
   MultiSelect,
+  Loader,
   Text,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -37,9 +40,15 @@ export default function RecordScorecardPage() {
   const [locked, setLocked] = useState(false);
   const [roundClosed, setRoundClosed] = useState(false);
   const [holeMeta, setHoleMeta] = useState({});
+  const [grintModalOpen, setGrintModalOpen] = useState(false);
+  const [grintScores, setGrintScores] = useState([]);
+  const [grintLoading, setGrintLoading] = useState(false);
+  const [grintImporting, setGrintImporting] = useState(false);
   const saveTimeout = useRef(null);
   const initialized = useRef(false);
   const loadedExisting = useRef(false);
+  const [authenticating, setAuthenticating] = useState(false);
+  const didMagic = useRef(false);
 
   useEffect(() => {
     fetch("/api/me")
@@ -50,6 +59,46 @@ export default function RecordScorecardPage() {
       })
       .catch(() => setMe(null));
   }, []);
+
+  useEffect(() => {
+    const token = searchParams.get("token");
+    if (!token || didMagic.current || me?._id) {
+      return;
+    }
+    didMagic.current = true;
+    setAuthenticating(true);
+    fetch("/api/auth/magic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === "active") {
+          const nextParams = new URLSearchParams(searchParams.toString());
+          nextParams.delete("token");
+          const nextQuery = nextParams.toString();
+          const nextUrl = nextQuery
+            ? `/rounds/${params.id}/record?${nextQuery}`
+            : `/rounds/${params.id}/record`;
+          window.location.href = nextUrl;
+        } else if (data.status === "pending") {
+          notifications.show({
+            title: "Aun pendiente",
+            message: "Tu acceso todavia no ha sido aprobado.",
+            color: "dusk",
+          });
+        }
+      })
+      .catch(() => {
+        notifications.show({
+          title: "No se pudo autenticar",
+          message: "Revisa tu liga e intenta de nuevo.",
+          color: "clay",
+        });
+      })
+      .finally(() => setAuthenticating(false));
+  }, [me, params, searchParams]);
 
   useEffect(() => {
     if (!params?.id) {
@@ -205,6 +254,17 @@ export default function RecordScorecardPage() {
       round.players.find(
         (player) => String(player._id) === String(activePlayerId)
       )?.name || ""
+    );
+  }, [round, activePlayerId]);
+
+  const activePlayer = useMemo(() => {
+    if (!round?.players || !activePlayerId) {
+      return null;
+    }
+    return (
+      round.players.find(
+        (player) => String(player._id) === String(activePlayerId)
+      ) || null
     );
   }, [round, activePlayerId]);
 
@@ -396,6 +456,82 @@ export default function RecordScorecardPage() {
     }
   };
 
+  const loadGrintScores = async () => {
+    if (!activePlayer?.grintId) {
+      return;
+    }
+    setGrintLoading(true);
+    try {
+      const res = await fetch(
+        `/api/grint/dashboard?grintId=${encodeURIComponent(
+          activePlayer.grintId
+        )}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo leer las jugadas.");
+      }
+      setGrintScores(Array.isArray(data.scores) ? data.scores : []);
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo cargar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    } finally {
+      setGrintLoading(false);
+    }
+  };
+
+  const openGrintModal = () => {
+    setGrintModalOpen(true);
+    loadGrintScores();
+  };
+
+  const applyGrintScorecard = async (scoreId) => {
+    if (!scoreId) {
+      return;
+    }
+    setGrintImporting(true);
+    try {
+      const res = await fetch(
+        `/api/grint/scorecard?scoreId=${encodeURIComponent(scoreId)}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo cargar la tarjeta.");
+      }
+      const imported = Array.isArray(data.holes) ? data.holes : [];
+      setHoles((prev) =>
+        prev.map((hole) => {
+          const match = imported.find((entry) => entry.hole === hole.hole);
+          if (!match) {
+            return hole;
+          }
+          return {
+            ...hole,
+            strokes: match.strokes ?? "",
+            putts: match.putts ?? "",
+          };
+        })
+      );
+      notifications.show({
+        title: "Tarjeta cargada",
+        message: "Datos importados desde TheGrint.",
+        color: "club",
+      });
+      setGrintModalOpen(false);
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo importar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    } finally {
+      setGrintImporting(false);
+    }
+  };
+
   useEffect(() => {
     if (!initialized.current || !me?._id || !round?._id) {
       return;
@@ -419,6 +555,49 @@ export default function RecordScorecardPage() {
         }
         // subtitle={round ? "Captura tus golpes por hoyo." : "Cargando..."}
       >
+        <Modal
+          opened={grintModalOpen}
+          onClose={() => setGrintModalOpen(false)}
+          title="Jugadas en TheGrint"
+        >
+          {grintLoading ? (
+            <Group justify="center" py="md">
+              <Loader size="sm" />
+            </Group>
+          ) : grintScores.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              No se encontraron jugadas recientes para este jugador.
+            </Text>
+          ) : (
+            <Stack>
+              {grintScores.map((score) => (
+                <Card key={score.scoreId} withBorder>
+                  <Text fw={600}>{score.course || "Jugada"}</Text>
+                  {score.date ? (
+                    <Text size="xs" c="dusk.6">
+                      {score.date}
+                    </Text>
+                  ) : null}
+                  <Text size="sm" c="dusk.6">
+                    {score.message || score.url}
+                  </Text>
+                  <Group justify="space-between" mt="sm">
+                    <Badge color="club" variant="light">
+                      {score.score ? `Score ${score.score}` : "Score"}
+                    </Badge>
+                    <Button
+                      size="xs"
+                      loading={grintImporting}
+                      onClick={() => applyGrintScorecard(score.scoreId)}
+                    >
+                      Cargar
+                    </Button>
+                  </Group>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </Modal>
         <Card mb="lg">
           <Group justify="space-between">
             <Text fw={700}>{title}</Text>
@@ -441,6 +620,11 @@ export default function RecordScorecardPage() {
               Cargando datos guardados...
             </Text>
           ) : null}
+          {authenticating ? (
+            <Text size="xs" c="dusk.6" mt="xs">
+              Verificando acceso...
+            </Text>
+          ) : null}
           {locked ? (
             <Text size="xs" c="dusk.6" mt="xs">
               Tarjeta aceptada por supervisor. Edicion bloqueada.
@@ -451,6 +635,20 @@ export default function RecordScorecardPage() {
               Jugada cerrada. Edicion bloqueada.
             </Text>
           ) : null}
+          <Group justify="flex-end" mt="sm">
+            {activePlayer?.grintId && !locked && !roundClosed ? (
+              <Button variant="light" onClick={openGrintModal}>
+                Cargar desde Grint
+              </Button>
+            ) : null}
+            <Button
+              variant="light"
+              component="a"
+              href={`/rounds/${params.id}/scorecard`}
+            >
+              Ver tarjeta
+            </Button>
+          </Group>
         </Card>
 
         {holes.map((hole, index) => (
@@ -631,11 +829,10 @@ export default function RecordScorecardPage() {
         <Group justify="flex-end" mt="lg">
           <Button
             color="club"
-            onClick={handleSave}
-            loading={saving}
-            disabled={locked || roundClosed}
+            component="a"
+            href={`/rounds/${params.id}/scorecard`}
           >
-            Guardar tarjeta
+            Ver tarjeta
           </Button>
         </Group>
       </AppShell>

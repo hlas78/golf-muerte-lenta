@@ -77,6 +77,26 @@ export async function POST(request, { params }) {
   if (!tee) {
     return NextResponse.json({ error: "Tee requerido" }, { status: 400 });
   }
+  const holesCount = round.holes;
+  const parTotal =
+    holesCount === 9
+      ? tee?.holes?.slice(0, 9).reduce((sum, hole) => sum + (hole.par || 0), 0)
+      : tee?.par_total ??
+        tee?.holes?.slice(0, holesCount).reduce(
+          (sum, hole) => sum + (hole.par || 0),
+          0
+        );
+  const courseRating =
+    holesCount === 9 ? tee?.front_course_rating : tee?.course_rating;
+  const slopeRating =
+    holesCount === 9 ? tee?.front_slope_rating : tee?.slope_rating;
+  const courseHandicap =
+    courseRating && slopeRating && Number.isFinite(player.handicap)
+      ? Math.round(
+          player.handicap * (slopeRating / 113) + (courseRating - parTotal)
+        )
+      : player.handicap || 0;
+  console.log(`${round.courseSnapshot.clubName} handicap: ${courseHandicap}`)
   const holeHandicaps =
     tee?.holes?.map((hole, idx) => ({
       hole: idx + 1,
@@ -95,11 +115,7 @@ export async function POST(request, { params }) {
     .slice(0, round.holes)
     .reduce((sum, hole) => sum + (hole.putts || 0), 0);
 
-  const strokesMap = allocateStrokes(
-    player.handicap || 0,
-    holeHandicaps,
-    round.holes
-  );
+  const strokesMap = allocateStrokes(courseHandicap, holeHandicaps, round.holes);
   const netTotal = holes.slice(0, round.holes).reduce((sum, hole) => {
     const strokes = hole.strokes || 0;
     const net = strokes - (strokesMap[hole.hole] || 0);
@@ -112,6 +128,7 @@ export async function POST(request, { params }) {
       round: round._id,
       player: player._id,
       teeName: tee?.tee_name || playerTee || "",
+      courseHandicap,
       holes,
       grossTotal,
       puttsTotal,

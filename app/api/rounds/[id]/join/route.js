@@ -1,15 +1,26 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import crypto from "crypto";
 import connectDb from "@/lib/db";
 import Round from "@/lib/models/Round";
+import Scorecard from "@/lib/models/Scorecard";
 import User from "@/lib/models/User";
 import { verifyToken } from "@/lib/auth";
-import { WELCOME_MESSAGES } from "@/lib/welcomeMessages";
+import { buildWelcomeMessage } from "@/lib/welcomeMessageBuilder";
 
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
+
+function buildRecordLink(roundId, token) {
+  const baseUrl = process.env.APP_URL || "http://localhost:3000";
+  const params = new URLSearchParams();
+  if (token) {
+    params.set("token", token);
+  }
+  return `${baseUrl}/rounds/${roundId}/record?${params.toString()}`;
+}
 
 export async function POST(request, { params }) {
   await connectDb();
@@ -69,11 +80,71 @@ export async function POST(request, { params }) {
   round.status = "active";
   await round.save();
   if (!alreadyJoined) {
+    if (!user.magicToken) {
+      user.magicToken = crypto.randomBytes(24).toString("hex");
+      user.magicTokenCreatedAt = new Date();
+      await user.save();
+    }
     const campo =
       round.courseSnapshot?.clubName || round.courseSnapshot?.courseName || "el campo";
-    const template =
-      WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
-    const message = template.replace("{campo}", campo);
+    const creator = round.createdBy
+      ? await User.findById(round.createdBy)
+      : null;
+    const recordLink = buildRecordLink(round._id, user.magicToken);
+    const message = buildWelcomeMessage({
+      campo,
+      creatorName: creator?.name || "sin nombre",
+      description: round.description || "",
+      recordLink,
+    });
+    const playerTee =
+      round.playerTees?.find(
+        (entry) => String(entry.player) === String(player._id)
+      )?.teeName || teeName;
+    const tee =
+      allTees.find((option) => option.tee_name === playerTee) || allTees[0];
+    const holesCount = round.holes;
+    const parTotal =
+      holesCount === 9
+        ? tee?.holes?.slice(0, 9).reduce((sum, hole) => sum + (hole.par || 0), 0)
+        : tee?.par_total ??
+          tee?.holes?.slice(0, holesCount).reduce(
+            (sum, hole) => sum + (hole.par || 0),
+            0
+          );
+    const courseRating =
+      holesCount === 9 ? tee?.front_course_rating : tee?.course_rating;
+    const slopeRating =
+      holesCount === 9 ? tee?.front_slope_rating : tee?.slope_rating;
+    const courseHandicap =
+      courseRating && slopeRating && Number.isFinite(user.handicap)
+        ? Math.round(
+            user.handicap * (slopeRating / 113) + (courseRating - parTotal)
+          )
+        : user.handicap || 0;
+    const existingCard = await Scorecard.findOne({
+      round: round._id,
+      player: player._id,
+    });
+    if (!existingCard) {
+      await Scorecard.create({
+        round: round._id,
+        player: player._id,
+        teeName: tee?.tee_name || playerTee || "",
+        courseHandicap,
+        holes: Array.from({ length: round.holes }, (_, idx) => ({
+          hole: idx + 1,
+          strokes: null,
+          putts: null,
+          ohYes: false,
+          sandy: false,
+          penalties: [],
+          bunker: false,
+          water: false,
+          holeOut: false,
+        })),
+      });
+    }
     await sendMessage(user.phone, message);
   }
   return NextResponse.json({ ok: true });

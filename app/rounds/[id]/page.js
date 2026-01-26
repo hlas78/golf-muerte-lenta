@@ -65,6 +65,17 @@ export default function RoundDetailPage() {
   );
   const frontHoles = useMemo(() => holes.slice(0, 9), [holes]);
   const backHoles = useMemo(() => holes.slice(9, 18), [holes]);
+  const holeMeta = useMemo(() => {
+    const tees = round?.courseSnapshot?.tees || {};
+    const allTees = [...(tees.male || []), ...(tees.female || [])];
+    const selected =
+      allTees.find((tee) => tee.tee_name === round?.teeName) || allTees[0];
+    const meta = selected?.holes || [];
+    return meta.reduce((acc, hole, idx) => {
+      acc[idx + 1] = hole;
+      return acc;
+    }, {});
+  }, [round]);
 
   useEffect(() => {
     if (!params?.id) {
@@ -278,6 +289,51 @@ export default function RoundDetailPage() {
         hole: idx + 1,
         handicap: hole.handicap,
       })) || []
+    );
+  };
+
+  const getCourseHandicapForCard = (card) => {
+    if (Number.isFinite(card.courseHandicap)) {
+      return card.courseHandicap;
+    }
+    const tees = round?.courseSnapshot?.tees;
+    if (!tees) {
+      return card.player?.handicap ?? "-";
+    }
+    const allTees = [...(tees.male || []), ...(tees.female || [])];
+    const teeName =
+      card.teeName ||
+      round?.playerTees?.find(
+        (entry) => String(entry.player) === String(card.player?._id)
+      )?.teeName ||
+      round?.teeName;
+    const selected =
+      allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
+    if (!selected) {
+      return card.player?.handicap ?? "-";
+    }
+    const holesCount = round?.holes || 18;
+    const parTotal =
+      holesCount === 9
+        ? selected.holes
+            ?.slice(0, 9)
+            .reduce((sum, hole) => sum + (hole.par || 0), 0)
+        : selected.par_total ??
+          selected.holes
+            ?.slice(0, holesCount)
+            .reduce((sum, hole) => sum + (hole.par || 0), 0);
+    const courseRating =
+      holesCount === 9
+        ? selected.front_course_rating
+        : selected.course_rating;
+    const slopeRating =
+      holesCount === 9 ? selected.front_slope_rating : selected.slope_rating;
+    if (!courseRating || !slopeRating) {
+      return card.player?.handicap ?? "-";
+    }
+    return Math.round(
+      (card.player?.handicap || 0) * (slopeRating / 113) +
+        (courseRating - parTotal)
     );
   };
 
@@ -507,6 +563,7 @@ export default function RoundDetailPage() {
     }
   };
 
+
   const minimizeTransfers = (payments) => {
     const summaryMap = {};
     payments.forEach((payment) => {
@@ -592,6 +649,16 @@ export default function RoundDetailPage() {
                 <Button
                   size="xs"
                   variant="light"
+                  component={Link}
+                  href={`/rounds/${params?.id}/record-multi`}
+                >
+                  Captura por hoyo
+                </Button>
+              ) : null}
+              {canApprove && !isClosed ? (
+                <Button
+                  size="xs"
+                  variant="light"
                   onClick={handleClose}
                   loading={closing}
                   disabled={!allAccepted}
@@ -631,8 +698,37 @@ export default function RoundDetailPage() {
                   <Table.Th>V2</Table.Th>
                   <Table.Th>Total</Table.Th>
                   <Table.Th>Putts</Table.Th>
-                  <Table.Th>Estado</Table.Th>
+                  {/* <Table.Th>Estado</Table.Th> */}
                   {canApprove ? <Table.Th>Accion</Table.Th> : null}
+                  <Table.Th>HC tee</Table.Th>
+                </Table.Tr>
+                <Table.Tr>
+                  <Table.Th className="gml-sticky-col">Par</Table.Th>
+                  {holes.map((hole) => (
+                    <Table.Th key={`par-${hole}`}>
+                      {holeMeta[hole]?.par ?? "-"}
+                    </Table.Th>
+                  ))}
+                  <Table.Th />
+                  <Table.Th />
+                  <Table.Th />
+                  <Table.Th />
+                  {canApprove ? <Table.Th /> : null}
+                  <Table.Th />
+                </Table.Tr>
+                <Table.Tr>
+                  <Table.Th className="gml-sticky-col">HC</Table.Th>
+                  {holes.map((hole) => (
+                    <Table.Th key={`hc-${hole}`}>
+                      {holeMeta[hole]?.handicap ?? "-"}
+                    </Table.Th>
+                  ))}
+                  <Table.Th />
+                  <Table.Th />
+                  <Table.Th />
+                  <Table.Th />
+                  {canApprove ? <Table.Th /> : null}
+                  <Table.Th />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -715,22 +811,23 @@ export default function RoundDetailPage() {
                           : card.grossTotal ?? "-"}
                       </Table.Td>
                       <Table.Td>{card.puttsTotal ?? "-"}</Table.Td>
-                      <Table.Td>
+                      {/* <Table.Td>
                         <Badge
                           color={card.accepted ? "club" : "dusk"}
                           variant="light"
                         >
                           {card.accepted ? "Aceptada" : "Pendiente"}
                         </Badge>
-                      </Table.Td>
+                      </Table.Td> */}
                       {canApprove ? (
                         <Table.Td>
-                          <Group gap="xs">
+                          <Group gap="xs" className="gml-cell-actions">
                             <Button
                               size="xs"
                               variant="light"
                               component="a"
                               href={`/rounds/${params?.id}/record?playerId=${card.player?._id}`}
+                              className="gml-btn-tight"
                             >
                               Editar
                             </Button>
@@ -739,12 +836,14 @@ export default function RoundDetailPage() {
                               variant="light"
                               onClick={() => handleAccept(card._id)}
                               disabled={card.accepted || !isCardComplete(card)}
+                              className="gml-btn-tight"
                             >
                               {card.accepted ? "Listo" : "Aceptar"}
                             </Button>
                           </Group>
                         </Table.Td>
                       ) : null}
+                      <Table.Td>{getCourseHandicapForCard(card)}</Table.Td>
                     </Table.Tr>
                   ))
                 )}
@@ -852,7 +951,7 @@ export default function RoundDetailPage() {
           </div>
         </Card>
 
-        <Card mt="lg">
+        {/* <Card mt="lg">
           <Text fw={700} mb="sm">
             Jugadores conectados
           </Text>
@@ -870,7 +969,7 @@ export default function RoundDetailPage() {
               </Group>
             ))
           )}
-        </Card>
+        </Card> */}
 
         <Card mt="lg">
           <Group justify="space-between" mb="sm">

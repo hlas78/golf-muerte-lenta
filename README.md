@@ -24,6 +24,12 @@ node scripts/seedCourses.js
 
 ## Changelog
 
+### 0.1.4
+
+- Integracion con TheGrint para importar tarjetas desde el dashboard.
+- Endpoints /api/grint para listar jugadas y cargar scorecards.
+- Nuevo script parse:scorecard y soporte GRINT_EMAIL/GRINT_PASSWORD en env.
+
 ### 0.1.3
 
 - Unificacion de la pantalla de jugada y tarjeta en /rounds/[id].

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, Group, Text } from "@mantine/core";
+import { Badge, Button, Card, Group, Modal, Text } from "@mantine/core";
 import AppShell from "./components/AppShell";
 import StatCard from "./components/StatCard";
 
@@ -10,6 +10,8 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [role, setRole] = useState("");
   const [rounds, setRounds] = useState([]);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetch("/api/me")
@@ -35,6 +37,7 @@ export default function Home() {
     (round) => round.status === "open" || round.status === "active"
   );
   const closedRounds = rounds.filter((round) => round.status === "closed");
+  const deleteModalOpen = Boolean(deleteTarget);
   const formatRoundDate = (value) => {
     if (!value) {
       return "Sin fecha";
@@ -50,6 +53,31 @@ export default function Home() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget?._id) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/rounds/${deleteTarget._id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo eliminar la jugada.");
+      }
+      setRounds((prev) =>
+        prev.filter((round) => String(round._id) !== String(deleteTarget._id))
+      );
+      setDeleteTarget(null);
+    } catch (error) {
+      // eslint-disable-next-line no-alert
+      alert(error.message || "No se pudo eliminar.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -96,20 +124,25 @@ export default function Home() {
               </Text>
             ) : (
               openRounds.map((round) => (
-                <Card
-                  key={round._id}
-                  component={Link}
-                  href={`/rounds/${round._id}`}
-                  withBorder
-                >
+                <Card key={round._id} withBorder>
                   <Group justify="space-between" mb="xs">
                     <Text fw={700}>
                       {round.courseSnapshot?.clubName || "Campo"} - {round.holes} hoyos
                     </Text>
-                    {/* <Badge color={round.status === "active" ? "club" : "dusk"}>
-                      {round.status === "active" ? "Activa" : "Abierta"}
-                    </Badge> */}
+                    {isAdmin ? (
+                      <Button
+                        size="xs"
+                        variant="light"
+                        color="clay"
+                        onClick={() => setDeleteTarget(round)}
+                      >
+                        Eliminar
+                      </Button>
+                    ) : null}
                   </Group>
+                  <Text size="sm" c="dusk.6">
+                    <Link href={`/rounds/${round._id}`}>Ver jugada</Link>
+                  </Text>
                   {/* <Text size="sm" c="dusk.6">
                     {round.courseSnapshot?.courseName || "Curso"}
                   </Text> */}
@@ -152,20 +185,30 @@ export default function Home() {
               </Text>
             ) : (
               closedRounds.map((round) => (
-                <Card
-                  key={round._id}
-                  component={Link}
-                  href={`/rounds/${round._id}`}
-                  withBorder
-                >
+                <Card key={round._id} withBorder>
                   <Group justify="space-between" mb="xs">
                     <Text fw={700}>
                       {round.courseSnapshot?.clubName || "Campo"}
                     </Text>
-                    <Badge color="dusk" variant="light">
-                      Cerrada
-                    </Badge>
+                    <Group gap="xs">
+                      <Badge color="dusk" variant="light">
+                        Cerrada
+                      </Badge>
+                      {isAdmin ? (
+                        <Button
+                          size="xs"
+                          variant="light"
+                          color="clay"
+                          onClick={() => setDeleteTarget(round)}
+                        >
+                          Eliminar
+                        </Button>
+                      ) : null}
+                    </Group>
                   </Group>
+                  <Text size="sm" c="dusk.6">
+                    <Link href={`/rounds/${round._id}`}>Ver jugada</Link>
+                  </Text>
                   <Text size="sm" c="dusk.6">
                     {round.courseSnapshot?.courseName || "Curso"}
                   </Text>
@@ -189,6 +232,24 @@ export default function Home() {
           </div>
         </section>
       </AppShell>
+      <Modal
+        opened={deleteModalOpen}
+        onClose={() => setDeleteTarget(null)}
+        title="Eliminar jugada"
+        centered
+      >
+        <Text size="sm" c="dusk.6" mb="md">
+          Esta accion elimina la jugada, sus tarjetas y pagos. ¿Deseas continuar?
+        </Text>
+        <Group justify="flex-end">
+          <Button variant="light" onClick={() => setDeleteTarget(null)}>
+            Cancelar
+          </Button>
+          <Button color="clay" onClick={handleDelete} loading={deleting}>
+            Eliminar
+          </Button>
+        </Group>
+      </Modal>
     </main>
   );
 }

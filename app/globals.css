@@ -139,10 +139,24 @@ tbody .gml-sticky-col {
     min-width: 720px;
   }
 
+  .gml-table-scroll table th,
+  .gml-table-scroll table td {
+    padding: 0.1rem 0.3rem;
+  }
+
   .gml-stepper-controls button {
     min-width: 52px;
     height: 48px;
     font-size: 1.2rem;
+  }
+
+  .gml-btn-tight {
+    padding: 0.15rem 0.35rem;
+    min-height: 24px;
+  }
+
+  .gml-cell-actions {
+    flex-wrap: nowrap;
   }
 }
 

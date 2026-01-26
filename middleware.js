@@ -19,6 +19,10 @@ export function middleware(request) {
 
   const token = request.cookies.get("gml_token")?.value;
   if (!token) {
+    const magicToken = request.nextUrl.searchParams.get("token");
+    if (magicToken) {
+      return NextResponse.next();
+    }
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     return NextResponse.redirect(loginUrl);

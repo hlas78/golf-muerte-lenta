@@ -24,6 +24,7 @@ export default function UsersPage() {
     name: "",
     phone: "",
     handicap: "",
+    grintId: "",
     role: "player",
     password: "",
   });
@@ -63,6 +64,7 @@ export default function UsersPage() {
       name: user.name || "",
       phone: user.phone || "",
       handicap: String(user.handicap ?? ""),
+      grintId: user.grintId || "",
       role: user.role || "player",
       password: "",
     });
@@ -87,13 +89,14 @@ export default function UsersPage() {
     }
     setSaving(true);
     try {
-      const payload = {
-        name: form.name,
-        phone: form.phone,
-        handicap: Number(form.handicap || 0),
-        role: form.role,
-        password: form.password || undefined,
-      };
+        const payload = {
+          name: form.name,
+          phone: form.phone,
+          handicap: Number(form.handicap || 0),
+          grintId: form.grintId || "",
+          role: form.role,
+          password: form.password || undefined,
+        };
       const res = creating
         ? await fetch("/api/users", {
             method: "POST",
@@ -147,6 +150,7 @@ export default function UsersPage() {
                   name: "",
                   phone: "",
                   handicap: "",
+                  grintId: "",
                   role: "player",
                   password: "",
                 });
@@ -194,6 +198,14 @@ export default function UsersPage() {
                 updateForm({ handicap: event.currentTarget.value })
               }
             />
+            <TextInput
+              label="ID Grint"
+              placeholder="ID de perfil"
+              value={form.grintId}
+              onChange={(event) =>
+                updateForm({ grintId: event.currentTarget.value })
+              }
+            />
             <Select
               label="Rol"
               value={form.role}
@@ -224,6 +236,7 @@ export default function UsersPage() {
                       name: "",
                       phone: "",
                       handicap: "",
+                      grintId: "",
                       role: "player",
                       password: "",
                     });
@@ -258,7 +271,7 @@ export default function UsersPage() {
                 <div>
                   <Text fw={600}>{user.name}</Text>
                   <Text size="sm" c="dusk.6">
-                    {user.phone} · HC {user.handicap ?? 0} · {user.role}
+                    {user.phone} · HC {user.handicap ?? 0} · {user.role} · ID Grint: {user.grintId}
                   </Text>
                 </div>
                 <Button

@@ -2,16 +2,26 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createRequire } from "module";
 import connectDb from "@/lib/db";
+import crypto from "crypto";
 import Round from "@/lib/models/Round";
 import Course from "@/lib/models/Course";
 import Config from "@/lib/models/Config";
 import User from "@/lib/models/User";
 import Scorecard from "@/lib/models/Scorecard";
 import { verifyToken } from "@/lib/auth";
-import { WELCOME_MESSAGES } from "@/lib/welcomeMessages";
+import { buildWelcomeMessage } from "@/lib/welcomeMessageBuilder";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
+
+function buildRecordLink(roundId, token) {
+  const baseUrl = process.env.APP_URL || "http://localhost:3000";
+  const params = new URLSearchParams();
+  if (token) {
+    params.set("token", token);
+  }
+  return `${baseUrl}/rounds/${roundId}/record?${params.toString()}`;
+}
 
 async function getConfigSnapshot() {
   let config = await Config.findOne({ key: "global" });
@@ -98,10 +108,19 @@ export async function POST(request) {
       round.courseSnapshot?.courseName ||
       "el campo";
     await Promise.allSettled(
-      participants.map((player) => {
-        const template =
-          WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
-        const message = template.replace("{campo}", campo);
+      participants.map(async (player) => {
+        if (!player.magicToken) {
+          player.magicToken = crypto.randomBytes(24).toString("hex");
+          player.magicTokenCreatedAt = new Date();
+          await player.save();
+        }
+        const recordLink = buildRecordLink(round._id, player.magicToken);
+        const message = buildWelcomeMessage({
+          campo,
+          creatorName: user?.name || "sin nombre",
+          description: round.description || "",
+          recordLink,
+        });
         return sendMessage(player.phone, message);
       })
     );

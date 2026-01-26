@@ -4,6 +4,7 @@ import Course from "@/lib/models/Course";
 
 export async function GET() {
   await connectDb();
-  const courses = await Course.find().sort({ clubName: 1 });
+  const courses = await Course.find();
+  // .sort({ clubName: 1 });
   return NextResponse.json(courses);
 }

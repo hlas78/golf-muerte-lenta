@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import connectDb from "@/lib/db";
 import User from "@/lib/models/User";
+import Round from "@/lib/models/Round";
+import Scorecard from "@/lib/models/Scorecard";
+import { allocateStrokes } from "@/lib/scoring";
 import { verifyToken, hashPassword } from "@/lib/auth";
 
 export async function PATCH(request, { params }) {
@@ -45,11 +48,90 @@ export async function PATCH(request, { params }) {
   if (body.handicap != null) {
     updates.handicap = Number(body.handicap) || 0;
   }
+  if (body.grintId != null) {
+    updates.grintId = String(body.grintId).trim();
+  }
   if (body.password) {
     updates.passwordHash = await hashPassword(body.password);
   }
 
   await User.updateOne({ _id: id }, updates);
+
+  if (body.handicap != null) {
+    const rounds = await Round.find({
+      players: id,
+      status: { $ne: "closed" },
+    });
+    const updatedHandicap = Number(body.handicap) || 0;
+    for (const round of rounds) {
+      const scorecard = await Scorecard.findOne({
+        round: round._id,
+        player: id,
+      });
+      if (!scorecard) {
+        continue;
+      }
+      const tees = round.courseSnapshot?.tees || {};
+      const allTees = [...(tees.male || []), ...(tees.female || [])];
+      const teeName =
+        scorecard.teeName ||
+        round.playerTees?.find(
+          (entry) => String(entry.player) === String(id)
+        )?.teeName ||
+        round.teeName;
+      const selected =
+        allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
+      if (!selected) {
+        continue;
+      }
+      const holesCount = round.holes;
+      const parTotal =
+        holesCount === 9
+          ? selected.holes
+              ?.slice(0, 9)
+              .reduce((sum, hole) => sum + (hole.par || 0), 0)
+          : selected.par_total ??
+            selected.holes
+              ?.slice(0, holesCount)
+              .reduce((sum, hole) => sum + (hole.par || 0), 0);
+      const courseRating =
+        holesCount === 9
+          ? selected.front_course_rating
+          : selected.course_rating;
+      const slopeRating =
+        holesCount === 9
+          ? selected.front_slope_rating
+          : selected.slope_rating;
+      const courseHandicap =
+        courseRating && slopeRating && Number.isFinite(updatedHandicap)
+          ? Math.round(
+              updatedHandicap * (slopeRating / 113) + (courseRating - parTotal)
+            )
+          : updatedHandicap;
+      console.log(`${round.courseSnapshot.clubName} handicap: ${courseHandicap}`)
+      const holeHandicaps =
+        selected?.holes?.map((hole, idx) => ({
+          hole: idx + 1,
+          handicap: hole.handicap,
+        })) || [];
+      const strokesMap = allocateStrokes(
+        courseHandicap,
+        holeHandicaps,
+        round.holes
+      );
+      let netTotal = 0;
+      for (let i = 1; i <= round.holes; i += 1) {
+        const hole = scorecard.holes?.find((entry) => entry.hole === i);
+        const strokes = hole?.strokes || 0;
+        const net = strokes - (strokesMap[i] || 0);
+        netTotal += net;
+      }
+      await Scorecard.updateOne(
+        { _id: scorecard._id },
+        { courseHandicap, teeName: selected.tee_name, netTotal }
+      );
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }
