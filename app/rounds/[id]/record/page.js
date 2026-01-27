@@ -9,6 +9,7 @@ import {
   Group,
   Modal,
   Stack,
+  Select,
   MultiSelect,
   Loader,
   Text,
@@ -40,6 +41,9 @@ export default function RecordScorecardPage() {
   const [locked, setLocked] = useState(false);
   const [roundClosed, setRoundClosed] = useState(false);
   const [holeMeta, setHoleMeta] = useState({});
+  const [teeOptions, setTeeOptions] = useState([]);
+  const [selectedTee, setSelectedTee] = useState(null);
+  const [updatingTee, setUpdatingTee] = useState(false);
   const [grintModalOpen, setGrintModalOpen] = useState(false);
   const [grintScores, setGrintScores] = useState([]);
   const [grintLoading, setGrintLoading] = useState(false);
@@ -47,6 +51,7 @@ export default function RecordScorecardPage() {
   const saveTimeout = useRef(null);
   const initialized = useRef(false);
   const loadedExisting = useRef(false);
+  const didScrollToMissing = useRef(false);
   const [authenticating, setAuthenticating] = useState(false);
   const didMagic = useRef(false);
 
@@ -131,6 +136,11 @@ export default function RecordScorecardPage() {
           return acc;
         }, {});
         setHoleMeta(metaMap);
+        const options = allTees.map((tee) => ({
+          value: tee.tee_name,
+          label: tee.tee_name,
+        }));
+        setTeeOptions(options);
         initialized.current = true;
       })
       .catch(() => {
@@ -165,6 +175,11 @@ export default function RecordScorecardPage() {
       return;
     }
     setActivePlayerId(targetId);
+    const teeName =
+      round.playerTees?.find(
+        (entry) => String(entry.player) === String(targetId)
+      )?.teeName || null;
+    setSelectedTee(teeName);
     setLoadingExisting(true);
     fetch(`/api/rounds/${params.id}/scorecards`)
       .then((res) => res.json())
@@ -219,6 +234,29 @@ export default function RecordScorecardPage() {
         setLoadingExisting(false);
       });
   }, [holes.length, me, params, role, round, router, searchParams]);
+
+  useEffect(() => {
+    if (loadingExisting || didScrollToMissing.current || holes.length === 0) {
+      return;
+    }
+    const hasCaptured = holes.some(
+      (hole) => hole.strokes != null && hole.strokes !== ""
+    );
+    const missingIndex = holes.findIndex(
+      (hole) => hole.strokes == null || hole.strokes === ""
+    );
+    if (!hasCaptured || missingIndex === -1) {
+      return;
+    }
+    didScrollToMissing.current = true;
+    const targetId = `hole-card-${holes[missingIndex].hole}`;
+    setTimeout(() => {
+      const element = document.getElementById(targetId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 0);
+  }, [loadingExisting, holes]);
 
   useEffect(() => {
     if (!round?.courseSnapshot?.tees || !me?._id) {
@@ -323,6 +361,53 @@ export default function RecordScorecardPage() {
         };
       })
     );
+  };
+
+  const canEditTee =
+    !roundClosed &&
+    !locked &&
+    activePlayerId &&
+    (String(activePlayerId) === String(me?._id) ||
+      role === "admin" ||
+      role === "supervisor");
+
+  const handleUpdateTee = async (value) => {
+    if (!value || !activePlayerId || !params?.id) {
+      return;
+    }
+    setUpdatingTee(true);
+    try {
+      const res = await fetch(
+        `/api/rounds/${params.id}/players/${activePlayerId}/tee`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ teeName: value }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo actualizar el tee.");
+      }
+      setSelectedTee(value);
+      const nextRound = await fetch(`/api/rounds/${params.id}`).then((r) =>
+        r.json()
+      );
+      setRound(nextRound);
+      notifications.show({
+        title: "Tee actualizado",
+        message: "Se actualizo el tee de salida.",
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo actualizar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    } finally {
+      setUpdatingTee(false);
+    }
   };
 
   const applyStrokePreset = (index, preset) => {
@@ -634,6 +719,21 @@ export default function RecordScorecardPage() {
               Jugada cerrada. Edicion bloqueada.
             </Text>
           ) : null}
+          <Text size="sm" c="dusk.6" mt="sm" mb="xs">
+            Tee de salida
+          </Text>
+          <Select
+            placeholder="Selecciona tee"
+            data={teeOptions}
+            value={selectedTee}
+            onChange={(value) => {
+              if (value) {
+                setSelectedTee(value);
+                handleUpdateTee(value);
+              }
+            }}
+            disabled={!canEditTee || updatingTee}
+          />
           <Group justify="flex-end" mt="sm">
             {activePlayer?.grintId && !locked && !roundClosed ? (
               <Button variant="light" onClick={openGrintModal}>
@@ -651,7 +751,7 @@ export default function RecordScorecardPage() {
         </Card>
 
         {holes.map((hole, index) => (
-          <Card key={hole.hole} mb="sm">
+          <Card key={hole.hole} mb="sm" id={`hole-card-${hole.hole}`}>
             <Group justify="space-between" mb="xs">
               <Text fw={700}>Hoyo {hole.hole}</Text>
               {/* <Badge color="dusk" variant="light">

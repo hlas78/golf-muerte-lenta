@@ -60,6 +60,8 @@ export default function RoundDetailPage() {
   const [optimizedTransfers, setOptimizedTransfers] = useState([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [uploadingCardId, setUploadingCardId] = useState(null);
+  const [uploadConfirmCard, setUploadConfirmCard] = useState(null);
 
   const holes = useMemo(
     () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
@@ -456,6 +458,38 @@ export default function RoundDetailPage() {
       });
     } finally {
       setUpdatingTee(null);
+    }
+  };
+
+  const handleUploadGrint = async (scorecardId) => {
+    if (!scorecardId) {
+      return;
+    }
+    setUploadingCardId(scorecardId);
+    try {
+      const res = await fetch("/api/grint/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scorecardId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo cargar la tarjeta.");
+      }
+      notifications.show({
+        title: "Tarjeta enviada",
+        message: "Se cargo en TheGrint",
+        color: "club",
+      });
+      loadScorecards();
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo cargar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    } finally {
+      setUploadingCardId(null);
     }
   };
 
@@ -889,11 +923,28 @@ export default function RoundDetailPage() {
                             >
                               Editar
                             </Button>
+                            {card.accepted &&
+                            !card.grintUploadedAt &&
+                            me?._id &&
+                            String(card.player?._id) === String(me._id) ? (
+                              <Button
+                                size="xs"
+                                variant="light"
+                                onClick={() => setUploadConfirmCard(card)}
+                                loading={uploadingCardId === card._id}
+                                className="gml-btn-tight"
+                              >
+                                Subir a Grint
+                              </Button>
+                            ) : null}
                             <Button
                               size="xs"
                               variant="light"
                               onClick={() => handleAccept(card._id)}
-                              disabled={card.accepted || !isCardComplete(card)}
+                              disabled={
+                                card.accepted ||
+                                !isCardComplete(card)
+                              }
                               className="gml-btn-tight"
                             >
                               {card.accepted ? "Listo" : "Aceptar"}
@@ -1087,6 +1138,51 @@ export default function RoundDetailPage() {
             onClick={confirmJoin}
             loading={joining}
             disabled={!joinTee}
+          >
+            Confirmar
+          </Button>
+        </Group>
+      </Modal>
+      <Modal
+        opened={Boolean(uploadConfirmCard)}
+        onClose={() => setUploadConfirmCard(null)}
+        title="Confirmar subida a TheGrint"
+        centered
+      >
+        {uploadConfirmCard ? (
+          <>
+            <Text size="sm" c="dusk.6" mb="sm">
+              Revisa el resumen antes de enviar la tarjeta.
+            </Text>
+            <Text fw={600}>{uploadConfirmCard.player?.name || "Jugador"}</Text>
+            <Text size="sm" c="dusk.6">
+              Tee: {uploadConfirmCard.teeName || "Sin tee"}
+            </Text>
+            <Text size="sm" c="dusk.6">
+              Campo: {courseName}
+            </Text>
+            <Text size="sm" c="dusk.6">
+              Hoyos: {round?.holes || "-"}
+            </Text>
+            <Text size="sm" c="dusk.6">
+              Total Golpes: {uploadConfirmCard.grossTotal ?? "-"} · Putts:{" "}
+              {uploadConfirmCard.puttsTotal ?? "-"}
+            </Text>
+          </>
+        ) : null}
+        <Group justify="flex-end" mt="md">
+          <Button variant="light" onClick={() => setUploadConfirmCard(null)}>
+            Cancelar
+          </Button>
+          <Button
+            color="club"
+            onClick={() => {
+              if (uploadConfirmCard?._id) {
+                handleUploadGrint(uploadConfirmCard._id);
+              }
+              setUploadConfirmCard(null);
+            }}
+            loading={uploadingCardId === uploadConfirmCard?._id}
           >
             Confirmar
           </Button>

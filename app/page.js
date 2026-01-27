@@ -180,9 +180,6 @@ export default function Home() {
                   <Text size="sm" c="dusk.6">
                     {formatRoundDate(round.createdAt)}
                   </Text>
-                  <Text size="sm" c="dusk.6">
-                    Pagos disponibles
-                  </Text>
                 </Card>
               ))
             )}

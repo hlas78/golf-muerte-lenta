@@ -32,6 +32,9 @@ export default function AppShell({
     if (userRole === "admin") {
       items.push({ label: "Config", href: "/settings" });
     }
+    if (userRole) {
+      items.push({ label: "TheGrint", href: "/grint" });
+    }
     items.push({ label: "Historial", href: "/history" });
     return items;
   }, [showAdminNav, userRole]);

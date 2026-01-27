@@ -22,7 +22,20 @@ node scripts/seedCourses.js
 - MongoDB + Mongoose
 - Socket.IO para tarjetas en vivo
 
+## TheGrint
+
+- Importar tarjetas y actualizar handicap usan credenciales globales en env: `GRINT_EMAIL` / `GRINT_PASSWORD`.
+- Exportar tarjetas (pendiente) usara credenciales por usuario configuradas en `/grint`.
+- Se requiere `GRINT_CRED_SECRET` para cifrar credenciales de usuario.
+
 ## Changelog
+
+### 0.1.5
+
+- Credenciales TheGrint por usuario con verificacion en /grint y cifrado con GRINT_CRED_SECRET.
+- Import de tarjetas y handicap con credenciales globales (GRINT_EMAIL/GRINT_PASSWORD).
+- Upload de tarjetas aceptadas a TheGrint con confirmacion y bloqueo de reenvio.
+- Nueva seleccion de tee en registro de tarjeta y permisos ajustados para supervisores.
 
 ### 0.1.4
 

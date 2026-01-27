@@ -24,7 +24,8 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
   const isSupervisor = actor.role === "admin" || actor.role === "supervisor";
-  if (!isSupervisor) {
+  const isSelf = String(actor._id) === String(playerId);
+  if (!isSupervisor && !isSelf) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (round.status === "closed") {
