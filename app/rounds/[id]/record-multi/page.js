@@ -277,7 +277,10 @@ export default function RecordMultiPage() {
           return null;
         }
         const holeMeta = getHoleMetaForPlayer(playerId);
-        const holes = (card.holes?.length ? card.holes : buildEmptyHoles(round.holes)).map(
+        const holes = (card.holes?.length
+          ? card.holes
+          : buildEmptyHoles(round.holes)
+        ).map(
           (hole) => ({
             ...hole,
             par: holeMeta[hole.hole]?.par,

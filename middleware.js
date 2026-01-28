@@ -6,7 +6,7 @@ const PUBLIC_PATHS = [
   "/api/auth",
   "/_next",
   "/favicon",
-  "/logoML.jpeg",
+  "/logo.png",
 ];
 
 export function middleware(request) {

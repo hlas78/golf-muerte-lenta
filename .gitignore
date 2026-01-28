@@ -41,4 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 scripts/thegrint-profile
+data/grint-sessions
 data/htmlscorecard
+data/scorecardUpload*

@@ -30,6 +30,12 @@ node scripts/seedCourses.js
 
 ## Changelog
 
+### 0.1.6
+
+- Subida de scorecards a TheGrint con confirmacion y bloqueo por tarjeta.
+- Selector de tee en el registro de tarjeta.
+- Iconos PWA (180/192/512) y manifest para agregar a home screen.
+
 ### 0.1.5
 
 - Credenciales TheGrint por usuario con verificacion en /grint y cifrado con GRINT_CRED_SECRET.
