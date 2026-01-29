@@ -177,6 +177,12 @@ export default function RoundDetailPage() {
 
   const players = useMemo(() => round?.players || [], [round]);
   const playerTees = useMemo(() => round?.playerTees || [], [round]);
+  const playerTeeMap = useMemo(() => {
+    return playerTees.reduce((acc, entry) => {
+      acc[String(entry.player)] = entry.teeName;
+      return acc;
+    }, {});
+  }, [playerTees]);
   const isJoined = useMemo(
     () =>
       Boolean(
@@ -274,74 +280,148 @@ export default function RoundDetailPage() {
     }, {});
   }, [summary]);
 
-  const getHoleHandicapsForCard = (card) => {
+  const holeHandicapsByPlayer = useMemo(() => {
     const tees = round?.courseSnapshot?.tees;
-    if (!tees) {
+    if (!tees || !scorecards.length) {
+      return {};
+    }
+    const allTees = [...(tees.male || []), ...(tees.female || [])];
+    return scorecards.reduce((acc, card) => {
+      const playerId = card.player?._id?.toString();
+      if (!playerId) {
+        return acc;
+      }
+      const teeName =
+        card.teeName ||
+      playerTeeMap[String(playerId)] ||
+      round?.teeName;
+      const selected =
+        allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
+      acc[playerId] =
+        selected?.holes?.map((hole, idx) => ({
+          hole: idx + 1,
+          handicap: hole.handicap,
+        })) || [];
+      return acc;
+    }, {});
+  }, [round, scorecards]);
+
+  const getHoleHandicapsForCard = (card) => {
+    const playerId = card.player?._id?.toString();
+    if (!playerId) {
       return [];
     }
-    const allTees = [...(tees.male || []), ...(tees.female || [])];
-    const teeName =
-      card.teeName ||
-      round?.playerTees?.find(
-        (entry) => String(entry.player) === String(card.player?._id)
-      )?.teeName ||
-      round?.teeName;
-    const selected =
-      allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
-    return (
-      selected?.holes?.map((hole, idx) => ({
-        hole: idx + 1,
-        handicap: hole.handicap,
-      })) || []
-    );
+    return holeHandicapsByPlayer[playerId] || [];
   };
 
-  const getCourseHandicapForCard = (card) => {
-    if (Number.isFinite(card.courseHandicap)) {
-      return card.courseHandicap;
+  const showAdvantages =
+    Array.isArray(summary?.payments) && summary.payments.length > 0;
+  const minCourseHandicap = useMemo(() => {
+    if (!scorecards.length) {
+      return 0;
+    }
+    return scorecards.reduce((min, entry) => {
+      const value = Number.isFinite(entry.courseHandicap)
+        ? entry.courseHandicap
+        : entry.player?.handicap || 0;
+      return value < min ? value : min;
+    }, Number.POSITIVE_INFINITY);
+  }, [scorecards]);
+  const advantageStrokesByPlayer = useMemo(() => {
+    if (!showAdvantages || !round?.holes) {
+      return {};
+    }
+    return scorecards.reduce((acc, card) => {
+      const playerId = card.player?._id?.toString();
+      if (!playerId) {
+        return acc;
+      }
+      const handicaps = getHoleHandicapsForCard(card);
+      const courseHandicap = Number.isFinite(card.courseHandicap)
+        ? card.courseHandicap
+        : card.player?.handicap || 0;
+      const relativeHandicap = Math.max(
+        0,
+        courseHandicap -
+          (Number.isFinite(minCourseHandicap) ? minCourseHandicap : 0)
+      );
+      acc[playerId] = buildStrokesMap(
+        relativeHandicap,
+        handicaps,
+        round.holes
+      );
+      return acc;
+    }, {});
+  }, [scorecards, round, minCourseHandicap, showAdvantages]);
+
+  const courseHandicapByPlayer = useMemo(() => {
+    if (!scorecards.length) {
+      return {};
     }
     const tees = round?.courseSnapshot?.tees;
-    if (!tees) {
-      return card.player?.handicap ?? "-";
+    const allTees = tees
+      ? [...(tees.male || []), ...(tees.female || [])]
+      : [];
+    return scorecards.reduce((acc, card) => {
+      const playerId = card.player?._id?.toString();
+      if (!playerId) {
+        return acc;
+      }
+      if (Number.isFinite(card.courseHandicap)) {
+        acc[playerId] = card.courseHandicap;
+        return acc;
+      }
+      if (!allTees.length) {
+        acc[playerId] = card.player?.handicap ?? "-";
+        return acc;
+      }
+      const teeName =
+        card.teeName ||
+        playerTeeMap[String(playerId)] ||
+        round?.teeName;
+      const selected =
+        allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
+      if (!selected) {
+        acc[playerId] = card.player?.handicap ?? "-";
+        return acc;
+      }
+      const holesCount = round?.holes || 18;
+      const parTotal =
+        holesCount === 9
+          ? selected.holes
+              ?.slice(0, 9)
+              .reduce((sum, hole) => sum + (hole.par || 0), 0)
+          : selected.par_total ??
+            selected.holes
+              ?.slice(0, holesCount)
+              .reduce((sum, hole) => sum + (hole.par || 0), 0);
+      const courseRating =
+        holesCount === 9
+          ? selected.front_course_rating
+          : selected.course_rating;
+      const slopeRating =
+        holesCount === 9 ? selected.front_slope_rating : selected.slope_rating;
+      if (!courseRating || !slopeRating) {
+        acc[playerId] = card.player?.handicap ?? "-";
+        return acc;
+      }
+      acc[playerId] = Math.round(
+        (card.player?.handicap || 0) * (slopeRating / 113) +
+          (courseRating - parTotal)
+      );
+      return acc;
+    }, {});
+  }, [round, scorecards]);
+
+  const getCourseHandicapForCard = (card) => {
+    const playerId = card.player?._id?.toString();
+    if (!playerId) {
+      return "-";
     }
-    const allTees = [...(tees.male || []), ...(tees.female || [])];
-    const teeName =
-      card.teeName ||
-      round?.playerTees?.find(
-        (entry) => String(entry.player) === String(card.player?._id)
-      )?.teeName ||
-      round?.teeName;
-    const selected =
-      allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
-    if (!selected) {
-      return card.player?.handicap ?? "-";
-    }
-    const holesCount = round?.holes || 18;
-    const parTotal =
-      holesCount === 9
-        ? selected.holes
-            ?.slice(0, 9)
-            .reduce((sum, hole) => sum + (hole.par || 0), 0)
-        : selected.par_total ??
-          selected.holes
-            ?.slice(0, holesCount)
-            .reduce((sum, hole) => sum + (hole.par || 0), 0);
-    const courseRating =
-      holesCount === 9
-        ? selected.front_course_rating
-        : selected.course_rating;
-    const slopeRating =
-      holesCount === 9 ? selected.front_slope_rating : selected.slope_rating;
-    if (!courseRating || !slopeRating) {
-      return card.player?.handicap ?? "-";
-    }
-    return Math.round(
-      (card.player?.handicap || 0) * (slopeRating / 113) +
-        (courseRating - parTotal)
-    );
+    return courseHandicapByPlayer[playerId] ?? "-";
   };
 
-  const buildStrokesMap = (handicap, holeHandicaps, holesCount) => {
+  function buildStrokesMap(handicap, holeHandicaps, holesCount) {
     const strokesPerHole = {};
     const base = Math.floor(handicap / holesCount);
     const extra = handicap % holesCount;
@@ -353,7 +433,7 @@ export default function RoundDetailPage() {
       strokesPerHole[hole.hole] = base + (idx < extra ? 1 : 0);
     });
     return strokesPerHole;
-  };
+  }
 
   const getTotalForHoles = (card, holeList) => {
     if (!Array.isArray(holeList) || holeList.length === 0) {
@@ -833,39 +913,54 @@ export default function RoundDetailPage() {
                     </Table.Td>
                   </Table.Tr>
                 ) : (
-                  scorecards.map((card) => (
-                    <Table.Tr key={card._id}>
-                      <Table.Td className="gml-sticky-col">
-                        {card.player?.name || "Jugador"}
-                      </Table.Td>
-                      {holes.map((hole) => {
-                        const entry = card.holes?.find(
-                          (item) => item.hole === hole
-                        );
-                        const strokes = entry?.strokes ?? "-";
-                        const putts = entry?.putts;
-                        const ohYes = entry?.ohYes;
-                        const sandy = entry?.sandy;
-                        const wet = entry?.water;
-                        const playerId = card.player?._id?.toString();
-                        const isWinningCell = Boolean(
-                          playerId && winningCells[playerId]?.has(hole)
-                        );
-                        return (
-                          <Table.Td
-                            key={hole}
-                            className={
-                              isWinningCell ? "gml-win-cell" : undefined
-                            }
-                          >
-                            {strokes}
-                            {putts != null ? ` (${putts})` : ""}
-                            {ohYes ? " · OY" : ""}
-                            {sandy ? " · S" : ""}
-                            {wet ? " · W" : ""}
-                          </Table.Td>
-                        );
-                      })}
+                  scorecards.map((card) => {
+                    const playerId = card.player?._id?.toString();
+                    const strokesMap = playerId
+                      ? advantageStrokesByPlayer[playerId] || {}
+                      : {};
+                    return (
+                      <Table.Tr key={card._id}>
+                        <Table.Td className="gml-sticky-col">
+                          {card.player?.name || "Jugador"}
+                        </Table.Td>
+                        {holes.map((hole) => {
+                          const entry = card.holes?.find(
+                            (item) => item.hole === hole
+                          );
+                          const strokes = entry?.strokes ?? "-";
+                          const putts = entry?.putts;
+                          const ohYes = entry?.ohYes;
+                          const sandy = entry?.sandy;
+                          const wet = entry?.water;
+                          const isWinningCell = Boolean(
+                            playerId && winningCells[playerId]?.has(hole)
+                          );
+                          const advantageCount = showAdvantages
+                            ? strokesMap[hole] || 0
+                            : 0;
+                          return (
+                            <Table.Td
+                              key={hole}
+                              className={[
+                                isWinningCell ? "gml-win-cell" : "",
+                                advantageCount > 0 ? "gml-advantage-cell" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            >
+                              {advantageCount > 0 ? (
+                                <span className="gml-advantage">
+                                  {"•".repeat(advantageCount)}
+                                </span>
+                              ) : null}
+                              {strokes}
+                              {putts != null ? ` (${putts})` : ""}
+                              {ohYes ? " · OY" : ""}
+                              {sandy ? " · S" : ""}
+                              {wet ? " · W" : ""}
+                            </Table.Td>
+                          );
+                        })}
                       <Table.Td
                         className={
                           card.player?._id &&
@@ -952,9 +1047,10 @@ export default function RoundDetailPage() {
                           </Group>
                         </Table.Td>
                       ) : null}
-                      <Table.Td>{getCourseHandicapForCard(card)}</Table.Td>
-                    </Table.Tr>
-                  ))
+                        <Table.Td>{getCourseHandicapForCard(card)}</Table.Td>
+                      </Table.Tr>
+                    );
+                  })
                 )}
               </Table.Tbody>
             </Table>
