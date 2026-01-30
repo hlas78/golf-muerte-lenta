@@ -22,7 +22,6 @@ export const metadata = {
   title: "Golf Muerte Lenta",
   description: "Registro de jugadas y apuestas entre amigos de la ML",
   manifest: "/manifest.json",
-  themeColor: "#F7F1E8",
   icons: {
     icon: [
       { url: "/logo_180.png", sizes: "180x180", type: "image/png" },
@@ -35,6 +34,10 @@ export const metadata = {
     title: "Golf Muerte Lenta",
     statusBarStyle: "default",
   },
+};
+
+export const viewport = {
+  themeColor: "#F7F1E8",
 };
 
 export default function RootLayout({ children }) {

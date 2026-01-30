@@ -46,6 +46,10 @@ export default function RecordMultiPage() {
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const autoSaveTimeout = useRef(null);
+  const storageKey = useMemo(
+    () => (params?.id ? `gml:round:${params.id}:record-multi:players` : ""),
+    [params]
+  );
 
   useEffect(() => {
     fetch("/api/me")
@@ -94,6 +98,23 @@ export default function RecordMultiPage() {
     }
     loadScorecards();
   }, [round]);
+
+  useEffect(() => {
+    if (!storageKey) {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setSelectedPlayers(parsed);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [storageKey]);
 
   const isClosed = round?.status === "closed";
   const holeNumber = Number(selectedHole || 1);
@@ -378,6 +399,17 @@ export default function RecordMultiPage() {
     return () => clearTimeout(autoSaveTimeout.current);
   }, [autoSaving, isClosed, round, saving, scorecards, selectedHole, selectedPlayers]);
 
+  useEffect(() => {
+    if (!storageKey) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(selectedPlayers));
+    } catch {
+      // ignore
+    }
+  }, [selectedPlayers, storageKey]);
+
   const stepHole = async (direction) => {
     if (!round?.holes) {
       return;
@@ -415,6 +447,20 @@ export default function RecordMultiPage() {
               clearable
               disabled={isClosed}
             />
+            <Button
+              variant="light"
+              onClick={() => setSelectedPlayers(players.map((player) => player._id))}
+              disabled={isClosed || players.length === 0}
+            >
+              Seleccionar todos
+            </Button>
+            <Button
+              variant="light"
+              onClick={() => setSelectedPlayers([])}
+              disabled={isClosed || selectedPlayers.length === 0}
+            >
+              Limpiar
+            </Button>
             <Select
               label="Hoyo"
               placeholder="Selecciona hoyo"

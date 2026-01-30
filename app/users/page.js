@@ -112,6 +112,10 @@ export default function UsersPage() {
         const data = await res.json();
         throw new Error(data.error || "No se pudo guardar.");
       }
+      const data = await res.json().catch(() => ({}));
+      if (creating && data.id) {
+        setSelectedId(data.id);
+      }
       notifications.show({
         title: creating ? "Jugador creado" : "Jugador actualizado",
         message: creating ? "Nuevo jugador agregado." : "Cambios guardados.",
@@ -119,7 +123,6 @@ export default function UsersPage() {
       });
       setForm((prev) => ({ ...prev, password: "" }));
       setCreating(false);
-      setSelectedId(null);
       loadUsers();
     } catch (error) {
       notifications.show({

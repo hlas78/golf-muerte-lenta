@@ -62,6 +62,7 @@ export default function RoundDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [uploadingCardId, setUploadingCardId] = useState(null);
   const [uploadConfirmCard, setUploadConfirmCard] = useState(null);
+  const [teesModalOpen, setTeesModalOpen] = useState(false);
 
   const holes = useMemo(
     () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
@@ -753,12 +754,12 @@ export default function RoundDetailPage() {
   return (
     <main>
       <AppShell title="Jugada activa" subtitle={loading ? "Cargando..." : ""}>
-        <Modal
-          opened={deleteOpen}
-          onClose={() => setDeleteOpen(false)}
-          title="Eliminar jugada"
-        >
-          <Text size="sm" c="dusk.6" mb="md">
+      <Modal
+        opened={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="Eliminar jugada"
+      >
+        <Text size="sm" c="dusk.6" mb="md">
             Esto elimina la jugada, sus tarjetas y pagos. Esta accion no se puede
             deshacer.
           </Text>
@@ -770,6 +771,36 @@ export default function RoundDetailPage() {
               Eliminar
             </Button>
           </Group>
+        </Modal>
+        <Modal
+          opened={teesModalOpen}
+          onClose={() => setTeesModalOpen(false)}
+          title="Editar tees de salida"
+          centered
+        >
+          {players.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              No hay jugadores en la jugada.
+            </Text>
+          ) : (
+            players.map((player) => (
+              <Group key={player._id} justify="space-between" mb="sm">
+                <div>
+                  <Text fw={600}>{player.name}</Text>
+                  <Text size="sm" c="dusk.6">
+                    HC {player.handicap ?? 0}
+                  </Text>
+                </div>
+                <Select
+                  data={teeOptions}
+                  value={playerTeeMap[String(player._id)] || ""}
+                  onChange={(value) => handleUpdateTee(player._id, value)}
+                  placeholder="Sin tee"
+                  disabled={updatingTee === player._id}
+                />
+              </Group>
+            ))
+          )}
         </Modal>
         <Card mb="lg">
           <Group justify="space-between">
@@ -795,6 +826,15 @@ export default function RoundDetailPage() {
                   href={`/rounds/${params?.id}/record`}
                 >
                   Editar tarjeta
+                </Button>
+              ) : null}
+              {canManage && !isClosed ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={() => setTeesModalOpen(true)}
+                >
+                  Editar tees
                 </Button>
               ) : null}
               {canApprove && !isClosed ? (
