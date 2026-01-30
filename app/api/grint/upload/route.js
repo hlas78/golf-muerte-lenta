@@ -95,7 +95,7 @@ export async function POST(request) {
   }
 
   const keepOpen = Boolean(process.env.GRINT_UPLOAD_KEEP_OPEN);
-  const headless = Boolean(process.env.GRINT_UPLOAD_KEEP_OPEN);
+  const headless = Boolean(process.env.GRINT_HEADLESS);
   try {
     await withGrintUserPage(
       actor,
