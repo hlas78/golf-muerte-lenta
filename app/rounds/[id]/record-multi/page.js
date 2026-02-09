@@ -45,6 +45,7 @@ export default function RecordMultiPage() {
   const [me, setMe] = useState(null);
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const autoSaveTimeout = useRef(null);
   const storageKey = useMemo(
     () => (params?.id ? `gml:round:${params.id}:record-multi:players` : ""),
@@ -178,6 +179,7 @@ export default function RecordMultiPage() {
       return;
     }
     const holeMeta = getHoleMetaForPlayer(playerId);
+    setDirty(true);
     setScorecards((prev) => {
       const next = [...prev];
       const idx = next.findIndex(
@@ -347,6 +349,7 @@ export default function RecordMultiPage() {
       if (refresh) {
         loadScorecards();
       }
+      setDirty(false);
       return true;
     } catch (error) {
       if (notify) {
@@ -373,7 +376,7 @@ export default function RecordMultiPage() {
   };
 
   useEffect(() => {
-    if (!selectedPlayers.length || !round?._id || isClosed) {
+    if (!dirty || !selectedPlayers.length || !round?._id || isClosed) {
       return;
     }
     if (autoSaveTimeout.current) {
@@ -436,20 +439,22 @@ export default function RecordMultiPage() {
         // subtitle="Selecciona jugadores y registra un hoyo a la vez."
       >
         <Card mb="lg">
-          <Group grow align="flex-end">
-            <MultiSelect
-              label="Jugadores"
-              placeholder="Selecciona participantes"
-              data={playerOptions}
-              value={selectedPlayers}
-              onChange={setSelectedPlayers}
-              searchable
-              clearable
-              disabled={isClosed}
-            />
+          <MultiSelect
+            label="Jugadores"
+            placeholder="Selecciona participantes"
+            data={playerOptions}
+            value={selectedPlayers}
+            onChange={setSelectedPlayers}
+            searchable
+            clearable
+            disabled={isClosed}
+          />
+          <Group align="flex-end" mt="md">
             <Button
               variant="light"
-              onClick={() => setSelectedPlayers(players.map((player) => player._id))}
+              onClick={() =>
+                setSelectedPlayers(players.map((player) => player._id))
+              }
               disabled={isClosed || players.length === 0}
             >
               Seleccionar todos
@@ -494,14 +499,15 @@ export default function RecordMultiPage() {
             </Text>
           </Card>
         ) : (
-          selectedCards.map((card) => {
+          selectedCards.map((card, idx) => {
             const playerId = card.player?._id;
             const entry = card.holes?.find((hole) => hole.hole === holeNumber);
             const holeMeta = getHoleMetaForPlayer(playerId);
             const meta = holeMeta[holeNumber] || {};
             const locked = card.accepted || isClosed;
+            const cardKey = playerId || card._id || `${idx}-${holeNumber}`;
             return (
-              <Card key={playerId} mb="lg">
+              <Card key={cardKey} mb="lg">
                 <Group justify="space-between" mb="sm">
                   <div>
                     <Text fw={700}>{card.player?.name || "Jugador"}</Text>
@@ -514,7 +520,7 @@ export default function RecordMultiPage() {
                   </Badge>
                 </Group>
                 <Text size="sm" c="dusk.6" mb="sm">
-                  Par {meta.par ?? "-"} · {meta.yardage ?? "--"} yds · HC{" "}
+                  Hoyo {holeNumber} · Par {meta.par ?? "-"} · {meta.yardage ?? "--"} yds · HC{" "}
                   {meta.handicap ?? "--"}
                 </Text>
                 <Group gap="xs" mb="sm">

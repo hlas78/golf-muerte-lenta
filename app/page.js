@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, Group, Modal, Text } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import AppShell from "./components/AppShell";
 import StatCard from "./components/StatCard";
 
@@ -10,6 +11,9 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [role, setRole] = useState("");
   const [rounds, setRounds] = useState([]);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importingRound, setImportingRound] = useState(false);
+  const [importFile, setImportFile] = useState(null);
 
   useEffect(() => {
     fetch("/api/me")
@@ -52,6 +56,50 @@ export default function Home() {
     });
   };
 
+  const handleImportRound = async () => {
+    if (!importFile) {
+      return;
+    }
+    setImportingRound(true);
+    try {
+      const text = await importFile.text();
+      const payload = JSON.parse(text);
+      const res = await fetch("/api/rounds/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo importar la jugada.");
+      }
+      setImportOpen(false);
+      setImportFile(null);
+      if (Array.isArray(data.missingPlayers) && data.missingPlayers.length) {
+        notifications.show({
+          title: "Importacion parcial",
+          message: `Faltan jugadores: ${data.missingPlayers.join(", ")}`,
+          color: "clay",
+        });
+      } else {
+        notifications.show({
+          title: "Jugada importada",
+          message: "Se importo correctamente.",
+          color: "club",
+        });
+      }
+      window.location.href = `/rounds/${data.id}`;
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo importar",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setImportingRound(false);
+    }
+  };
+
 
   return (
     <main>
@@ -61,6 +109,37 @@ export default function Home() {
         showAdminNav={isAdmin}
         showGreetingAsTitle
       >
+        <Modal
+          opened={importOpen}
+          onClose={() => setImportOpen(false)}
+          title="Importar jugada"
+          centered
+        >
+          <Text size="sm" c="dusk.6" mb="sm">
+            Selecciona un archivo exportado de Golf Muerte Lenta.
+          </Text>
+          <input
+            type="file"
+            accept="application/json"
+            onChange={(event) => {
+              const file = event.target.files?.[0] || null;
+              setImportFile(file);
+            }}
+          />
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={() => setImportOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              color="club"
+              onClick={handleImportRound}
+              loading={importingRound}
+              disabled={!importFile}
+            >
+              Importar
+            </Button>
+          </Group>
+        </Modal>
         {/* <section className="gml-hero">
           <div className="gml-badge">Golf</div>
           <h1>Muerte Lenta</h1>
@@ -86,9 +165,20 @@ export default function Home() {
         <section style={{ marginTop: "2rem" }}>
           <Group justify="space-between" mb="md">
             <Text fw={700} c="club.7">Jugadas abiertas</Text>
-            <Text size="sm" c="dusk.6">
-              {openRounds.length} activas
-            </Text>
+            <Group gap="sm">
+              {isAdmin ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={() => setImportOpen(true)}
+                >
+                  Importar jugada
+                </Button>
+              ) : null}
+              <Text size="sm" c="dusk.6">
+                {openRounds.length} activas
+              </Text>
+            </Group>
           </Group>
           <div className="gml-card-grid">
             {openRounds.length === 0 ? (

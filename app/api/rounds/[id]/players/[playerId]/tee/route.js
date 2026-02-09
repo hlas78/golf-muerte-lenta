@@ -5,6 +5,7 @@ import Round from "@/lib/models/Round";
 import Scorecard from "@/lib/models/Scorecard";
 import User from "@/lib/models/User";
 import { verifyToken } from "@/lib/auth";
+import { getCourseHandicapForRound } from "@/lib/scoring";
 
 export async function PUT(request, { params }) {
   await connectDb();
@@ -58,30 +59,11 @@ export async function PUT(request, { params }) {
   const player = await User.findById(playerId);
   const selectedTee = allTees.find((option) => option.tee_name === teeName);
   if (player && selectedTee) {
-    const holesCount = round.holes;
-    const parTotal =
-      holesCount === 9
-        ? selectedTee.holes
-            ?.slice(0, 9)
-            .reduce((sum, hole) => sum + (hole.par || 0), 0)
-        : selectedTee.par_total ??
-          selectedTee.holes
-            ?.slice(0, holesCount)
-            .reduce((sum, hole) => sum + (hole.par || 0), 0);
-    const courseRating =
-      holesCount === 9
-        ? selectedTee.front_course_rating
-        : selectedTee.course_rating;
-    const slopeRating =
-      holesCount === 9
-        ? selectedTee.front_slope_rating
-        : selectedTee.slope_rating;
-    const courseHandicap =
-      courseRating && slopeRating && Number.isFinite(player.handicap)
-        ? Math.round(
-            player.handicap * (slopeRating / 113) + (courseRating - parTotal)
-          )
-        : player.handicap || 0;
+    const courseHandicap = getCourseHandicapForRound(
+      selectedTee,
+      round,
+      player.handicap
+    );
     console.log(`${round.courseSnapshot.clubName} handicap: ${courseHandicap}`)
     await Scorecard.findOneAndUpdate(
       { round: round._id, player: player._id },

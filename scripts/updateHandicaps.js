@@ -112,9 +112,12 @@ async function extractHandicap(page, { userId }) {
     throw new Error(`No se pudo leer handicap (status ${res.status()})`);
   }
   const data = await res.json();
-  const value = Number.parseFloat(
-    String(data?.index_ghap || "").split('~')[0].replace(/[^\d.-]/g, "")
-  );
+  let value = 0;
+  if (String(data?.index_ghap || "").includes('~')) {
+    value = Number.parseFloat(String(data?.index_ghap || "").split('~')[0].replace(/[^\d.-]/g, "")) + 1
+  } else {
+    value = Number.parseFloat(String(data?.index_ghap || "").split('~')[0].replace(/[^\d.-]/g, ""));
+  }
   if (Number.isNaN(value)) {
     throw new Error("No se pudo leer handicap desde API");
   }

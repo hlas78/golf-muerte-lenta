@@ -542,6 +542,12 @@ export default function RecordScorecardPage() {
 
   const loadGrintScores = async () => {
     if (!activePlayer?.grintId) {
+      notifications.show({
+        title: "Grint ID requerido",
+        message: "Captura tu Grint ID para poder cargar desde Grint.",
+        color: "clay",
+      });
+      setGrintScores([]);
       return;
     }
     setGrintLoading(true);
@@ -735,7 +741,7 @@ export default function RecordScorecardPage() {
             disabled={!canEditTee || updatingTee}
           />
           <Group justify="flex-end" mt="sm">
-            {activePlayer?.grintId && !locked && !roundClosed ? (
+            {!locked && !roundClosed ? (
               <Button variant="light" onClick={openGrintModal}>
                 Cargar desde Grint
               </Button>

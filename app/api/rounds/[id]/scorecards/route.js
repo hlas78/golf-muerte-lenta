@@ -5,7 +5,12 @@ import connectDb from "@/lib/db";
 import Round from "@/lib/models/Round";
 import Scorecard from "@/lib/models/Scorecard";
 import User from "@/lib/models/User";
-import { allocateStrokes, calculatePayments } from "@/lib/scoring";
+import {
+  allocateStrokes,
+  calculatePayments,
+  getCourseHandicapForRound,
+  normalizeHoleHandicaps,
+} from "@/lib/scoring";
 import Config from "@/lib/models/Config";
 import { verifyToken } from "@/lib/auth";
 import { WIN_MESSAGES } from "@/lib/winMessages";
@@ -75,29 +80,16 @@ export async function POST(request, { params }) {
   if (!tee) {
     return NextResponse.json({ error: "Tee requerido" }, { status: 400 });
   }
-  const holesCount = round.holes;
-  const parTotal =
-    holesCount === 9
-      ? tee?.holes?.slice(0, 9).reduce((sum, hole) => sum + (hole.par || 0), 0)
-      : tee?.par_total ??
-        tee?.holes?.slice(0, holesCount).reduce(
-          (sum, hole) => sum + (hole.par || 0),
-          0
-        );
-  const courseRating =
-    holesCount === 9 ? tee?.front_course_rating : tee?.course_rating;
-  const slopeRating =
-    holesCount === 9 ? tee?.front_slope_rating : tee?.slope_rating;
-  const courseHandicap =
-    courseRating && slopeRating && Number.isFinite(player.handicap)
-      ? Math.round(
-          player.handicap * (slopeRating / 113) + (courseRating - parTotal)
-        )
-      : player.handicap || 0;
+  const courseHandicap = getCourseHandicapForRound(
+    tee,
+    round,
+    player.handicap
+  );
   console.log(`${round.courseSnapshot.clubName} handicap: ${courseHandicap}`)
+  const normalizedTeeHoles = normalizeHoleHandicaps(tee?.holes || [], round);
   const holeHandicaps =
-    tee?.holes?.map((hole, idx) => ({
-      hole: idx + 1,
+    normalizedTeeHoles.map((hole, idx) => ({
+      hole: hole.hole ?? idx + 1,
       handicap: hole.handicap,
     })) || [];
 
@@ -382,9 +374,13 @@ export async function PUT(request, { params }) {
   const allTees = [...(tees.male || []), ...(tees.female || [])];
   const fallbackTee =
     allTees.find((option) => option.tee_name === round.teeName) || allTees[0];
+  const normalizedFallbackHoles = normalizeHoleHandicaps(
+    fallbackTee?.holes || [],
+    round
+  );
   const holeHandicaps =
-    fallbackTee?.holes?.map((hole, idx) => ({
-      hole: idx + 1,
+    normalizedFallbackHoles.map((hole, idx) => ({
+      hole: hole.hole ?? idx + 1,
       handicap: hole.handicap,
       par: hole.par,
     })) || [];
@@ -398,9 +394,13 @@ export async function PUT(request, { params }) {
       )?.teeName;
     const tee =
       allTees.find((option) => option.tee_name === playerTee) || fallbackTee;
+    const normalizedPlayerHoles = normalizeHoleHandicaps(
+      tee?.holes || [],
+      round
+    );
     holeHandicapsByPlayer[card.player?._id?.toString()] =
-      tee?.holes?.map((hole, idx) => ({
-        hole: idx + 1,
+      normalizedPlayerHoles.map((hole, idx) => ({
+        hole: hole.hole ?? idx + 1,
         handicap: hole.handicap,
         par: hole.par,
       })) || holeHandicaps;

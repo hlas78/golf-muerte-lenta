@@ -7,7 +7,12 @@ import Scorecard from "@/lib/models/Scorecard";
 import Payment from "@/lib/models/Payment";
 import User from "@/lib/models/User";
 import Config from "@/lib/models/Config";
-import { calculatePayments } from "@/lib/scoring";
+import {
+  allocateStrokes,
+  calculatePayments,
+  getCourseHandicapForRound,
+  normalizeHoleHandicaps,
+} from "@/lib/scoring";
 import { verifyToken } from "@/lib/auth";
 
 const require = createRequire(import.meta.url);
@@ -213,9 +218,13 @@ export async function POST(request, { params }) {
     const fallbackTee =
       allTees.find((option) => option.tee_name === round.teeName) ||
       allTees[0];
+    const normalizedFallbackHoles = normalizeHoleHandicaps(
+      fallbackTee?.holes || [],
+      round
+    );
     const holeHandicaps =
-      fallbackTee?.holes?.map((hole, idx) => ({
-        hole: idx + 1,
+      normalizedFallbackHoles.map((hole, idx) => ({
+        hole: hole.hole ?? idx + 1,
         handicap: hole.handicap,
         par: hole.par,
       })) || [];
@@ -233,13 +242,43 @@ export async function POST(request, { params }) {
       const tee =
         allTees.find((option) => option.tee_name === playerTee) ||
         fallbackTee;
+      const normalizedPlayerHoles = normalizeHoleHandicaps(
+        tee?.holes || [],
+        round
+      );
       holeHandicapsByPlayer[card.player?._id?.toString()] =
-        tee?.holes?.map((hole, idx) => ({
-          hole: idx + 1,
+        normalizedPlayerHoles.map((hole, idx) => ({
+          hole: hole.hole ?? idx + 1,
           handicap: hole.handicap,
           par: hole.par,
         })) || holeHandicaps;
+
+      const courseHandicap = getCourseHandicapForRound(
+        tee,
+        round,
+        card.player?.handicap
+      );
+      const strokesMap = allocateStrokes(
+        courseHandicap,
+        holeHandicapsByPlayer[card.player?._id?.toString()] || holeHandicaps,
+        round.holes
+      );
+      const netTotal = (card.holes || []).slice(0, round.holes).reduce((sum, hole) => {
+        const strokes = hole?.strokes || 0;
+        return sum + (strokes - (strokesMap[hole.hole] || 0));
+      }, 0);
+      card.courseHandicap = courseHandicap;
+      card.netTotal = netTotal;
     });
+
+    await Promise.all(
+      populatedScorecards.map((card) =>
+        Scorecard.updateOne(
+          { _id: card._id },
+          { courseHandicap: card.courseHandicap, netTotal: card.netTotal }
+        )
+      )
+    );
 
     const calculated = calculatePayments({
       config: config || { bets: round.configSnapshot },

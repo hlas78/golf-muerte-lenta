@@ -4,7 +4,11 @@ import connectDb from "@/lib/db";
 import User from "@/lib/models/User";
 import Round from "@/lib/models/Round";
 import Scorecard from "@/lib/models/Scorecard";
-import { allocateStrokes } from "@/lib/scoring";
+import {
+  allocateStrokes,
+  getCourseHandicapForRound,
+  normalizeHoleHandicaps,
+} from "@/lib/scoring";
 import { verifyToken, hashPassword } from "@/lib/auth";
 
 export async function PATCH(request, { params }) {
@@ -84,34 +88,19 @@ export async function PATCH(request, { params }) {
       if (!selected) {
         continue;
       }
-      const holesCount = round.holes;
-      const parTotal =
-        holesCount === 9
-          ? selected.holes
-              ?.slice(0, 9)
-              .reduce((sum, hole) => sum + (hole.par || 0), 0)
-          : selected.par_total ??
-            selected.holes
-              ?.slice(0, holesCount)
-              .reduce((sum, hole) => sum + (hole.par || 0), 0);
-      const courseRating =
-        holesCount === 9
-          ? selected.front_course_rating
-          : selected.course_rating;
-      const slopeRating =
-        holesCount === 9
-          ? selected.front_slope_rating
-          : selected.slope_rating;
-      const courseHandicap =
-        courseRating && slopeRating && Number.isFinite(updatedHandicap)
-          ? Math.round(
-              updatedHandicap * (slopeRating / 113) + (courseRating - parTotal)
-            )
-          : updatedHandicap;
+      const courseHandicap = getCourseHandicapForRound(
+        selected,
+        round,
+        updatedHandicap
+      );
       console.log(`${round.courseSnapshot.clubName} handicap: ${courseHandicap}`)
+      const normalizedHoles = normalizeHoleHandicaps(
+        selected?.holes || [],
+        round
+      );
       const holeHandicaps =
-        selected?.holes?.map((hole, idx) => ({
-          hole: idx + 1,
+        normalizedHoles.map((hole, idx) => ({
+          hole: hole.hole ?? idx + 1,
           handicap: hole.handicap,
         })) || [];
       const strokesMap = allocateStrokes(

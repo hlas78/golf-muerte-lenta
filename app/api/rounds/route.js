@@ -10,6 +10,7 @@ import User from "@/lib/models/User";
 import Scorecard from "@/lib/models/Scorecard";
 import { verifyToken } from "@/lib/auth";
 import { buildWelcomeMessage } from "@/lib/welcomeMessageBuilder";
+import { getCourseHandicapForRound } from "@/lib/scoring";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
@@ -56,11 +57,15 @@ export async function POST(request) {
   const course = await Course.findOne({ courseId: payload.courseId });
   const config = await getConfigSnapshot();
 
+  const holesCount = Number(payload.holes) || 18;
+  const nineType =
+    holesCount === 9 ? payload.nineType || "front" : "front";
   const round = await Round.create({
     course: course?._id,
     courseSnapshot: course,
     teeName: payload.teeName || "por-jugador",
-    holes: payload.holes,
+    holes: holesCount,
+    nineType,
     status: "open",
     createdBy: payload.createdBy,
     supervisor: payload.supervisor,
@@ -68,7 +73,7 @@ export async function POST(request) {
     description: payload.description || "",
     configSnapshot: config.bets,
   });
-
+  console.log(round)
   const playerIds = Array.isArray(payload.players)
     ? Array.from(new Set(payload.players.map(String)))
     : [];
@@ -83,11 +88,21 @@ export async function POST(request) {
     round.status = "active";
     await round.save();
 
+    const participants = await User.find({ _id: { $in: playerIds } });
+    const teeForHandicap =
+      allTees.find((option) => option.tee_name === defaultTeeName) ||
+      allTees[0];
+
     await Scorecard.insertMany(
-      playerIds.map((playerId) => ({
+      participants.map((player) => ({
         round: round._id,
-        player: playerId,
+        player: player._id,
         teeName: defaultTeeName,
+        courseHandicap: getCourseHandicapForRound(
+          teeForHandicap,
+          round,
+          player.handicap
+        ),
         holes: Array.from({ length: round.holes }, (_, idx) => ({
           hole: idx + 1,
           strokes: null,
@@ -101,8 +116,6 @@ export async function POST(request) {
         })),
       }))
     );
-
-    const participants = await User.find({ _id: { $in: playerIds } });
     const campo =
       round.courseSnapshot?.clubName ||
       round.courseSnapshot?.courseName ||

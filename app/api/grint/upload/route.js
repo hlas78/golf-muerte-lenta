@@ -171,14 +171,15 @@ export async function POST(request) {
         }
         await page.locator("#round").click();
         if (round.holes === 9) {
-          await page.selectOption("#round", { value: "F9" });
-          await page.evaluate(() => {
+          const roundValue = round.nineType === "back" ? "B9" : "F9";
+          await page.selectOption("#round", { value: roundValue });
+          await page.evaluate((value) => {
             const select = document.querySelector("#round");
             if (!select) return;
-            select.value = "F9";
+            select.value = value;
             select.dispatchEvent(new Event("input", { bubbles: true }));
             select.dispatchEvent(new Event("change", { bubbles: true }));
-          });
+          }, roundValue);
         } else {
           await page.selectOption("#round", { value: "18" });
           await page.evaluate(() => {

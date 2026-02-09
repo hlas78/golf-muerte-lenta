@@ -20,6 +20,7 @@ export default function NewRoundPage() {
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [holes, setHoles] = useState("18");
+  const [nineType, setNineType] = useState("front");
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedPlayers, setSelectedPlayers] = useState([]);
@@ -82,6 +83,14 @@ export default function NewRoundPage() {
       });
       return;
     }
+    if (holes === "9" && !nineType) {
+      notifications.show({
+        title: "Faltan datos",
+        message: "Selecciona si es front 9 o back 9.",
+        color: "clay",
+      });
+      return;
+    }
     setLoading(true);
     try {
       const me = await fetch("/api/me").then((res) => res.json());
@@ -91,6 +100,7 @@ export default function NewRoundPage() {
         body: JSON.stringify({
           courseId: Number(selectedCourseId),
           holes: Number(holes),
+          nineType: holes === "9" ? nineType : "front",
           createdBy: me.user?._id,
           supervisor: me.user?._id,
           players: selectedPlayers,
@@ -136,6 +146,18 @@ export default function NewRoundPage() {
               value={holes}
               onChange={setHoles}
             />
+            {holes === "9" ? (
+              <Select
+                label="Vuelta"
+                placeholder="Front 9 o Back 9"
+                data={[
+                  { value: "front", label: "Front 9" },
+                  { value: "back", label: "Back 9" },
+                ]}
+                value={nineType}
+                onChange={setNineType}
+              />
+            ) : null}
             <MultiSelect
               label="Jugadores"
               placeholder="Selecciona jugadores"

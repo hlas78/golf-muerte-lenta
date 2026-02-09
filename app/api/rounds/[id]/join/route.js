@@ -7,6 +7,7 @@ import Scorecard from "@/lib/models/Scorecard";
 import User from "@/lib/models/User";
 import { verifyToken } from "@/lib/auth";
 import { buildWelcomeMessage } from "@/lib/welcomeMessageBuilder";
+import { getCourseHandicapForRound } from "@/lib/scoring";
 
 import { createRequire } from "module";
 
@@ -103,25 +104,11 @@ export async function POST(request, { params }) {
       )?.teeName || teeName;
     const tee =
       allTees.find((option) => option.tee_name === playerTee) || allTees[0];
-    const holesCount = round.holes;
-    const parTotal =
-      holesCount === 9
-        ? tee?.holes?.slice(0, 9).reduce((sum, hole) => sum + (hole.par || 0), 0)
-        : tee?.par_total ??
-          tee?.holes?.slice(0, holesCount).reduce(
-            (sum, hole) => sum + (hole.par || 0),
-            0
-          );
-    const courseRating =
-      holesCount === 9 ? tee?.front_course_rating : tee?.course_rating;
-    const slopeRating =
-      holesCount === 9 ? tee?.front_slope_rating : tee?.slope_rating;
-    const courseHandicap =
-      courseRating && slopeRating && Number.isFinite(user.handicap)
-        ? Math.round(
-            user.handicap * (slopeRating / 113) + (courseRating - parTotal)
-          )
-        : user.handicap || 0;
+    const courseHandicap = getCourseHandicapForRound(
+      tee,
+      round,
+      user.handicap
+    );
     const existingCard = await Scorecard.findOne({
       round: round._id,
       player: user._id,

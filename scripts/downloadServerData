@@ -1,0 +1,10 @@
+#!/bin/bash
+SERVER=muertelenta.xyz
+ssh $SERVER rm -rf dump*
+ssh $SERVER mongodump -d golf-muerte-lenta
+ssh $SERVER tar -cvzf dump.tar.gz dump
+scp $SERVER:dump.tar.gz data
+rm -rf data/dump
+tar -xvzf data/dump.tar.gz -C data
+mongosh --eval "use golf-muerte-lenta" --eval "db.dropDatabase()"
+mongorestore -d golf-muerte-lenta data/dump/golf-muerte-lenta

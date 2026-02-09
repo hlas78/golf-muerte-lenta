@@ -17,6 +17,8 @@ import {
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../components/AppShell";
 import { getSocket } from "@/lib/socketClient";
+import { getCourseHandicapForRound } from "@/lib/scoring";
+import { normalizeHoleHandicaps } from "@/lib/scoring";
 
 const PENALTY_LABELS = {
   pinkies: "Pinkies",
@@ -63,6 +65,10 @@ export default function RoundDetailPage() {
   const [uploadingCardId, setUploadingCardId] = useState(null);
   const [uploadConfirmCard, setUploadConfirmCard] = useState(null);
   const [teesModalOpen, setTeesModalOpen] = useState(false);
+  const [exportingRound, setExportingRound] = useState(false);
+  const [removePlayerOpen, setRemovePlayerOpen] = useState(false);
+  const [removePlayerId, setRemovePlayerId] = useState("");
+  const [removingPlayer, setRemovingPlayer] = useState(false);
 
   const holes = useMemo(
     () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
@@ -76,9 +82,9 @@ export default function RoundDetailPage() {
     const allTees = [...(tees.male || []), ...(tees.female || [])];
     const selected =
       allTees.find((tee) => tee.tee_name === round?.teeName) || allTees[0];
-    const meta = selected?.holes || [];
-    return meta.reduce((acc, hole, idx) => {
-      acc[idx + 1] = hole;
+    const normalized = normalizeHoleHandicaps(selected?.holes || [], round);
+    return normalized.reduce((acc, hole, idx) => {
+      acc[hole.hole ?? idx + 1] = hole;
       return acc;
     }, {});
   }, [round]);
@@ -298,9 +304,10 @@ export default function RoundDetailPage() {
       round?.teeName;
       const selected =
         allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
+      const normalized = normalizeHoleHandicaps(selected?.holes || [], round);
       acc[playerId] =
-        selected?.holes?.map((hole, idx) => ({
-          hole: idx + 1,
+        normalized.map((hole, idx) => ({
+          hole: hole.hole ?? idx + 1,
           handicap: hole.handicap,
         })) || [];
       return acc;
@@ -386,29 +393,10 @@ export default function RoundDetailPage() {
         acc[playerId] = card.player?.handicap ?? "-";
         return acc;
       }
-      const holesCount = round?.holes || 18;
-      const parTotal =
-        holesCount === 9
-          ? selected.holes
-              ?.slice(0, 9)
-              .reduce((sum, hole) => sum + (hole.par || 0), 0)
-          : selected.par_total ??
-            selected.holes
-              ?.slice(0, holesCount)
-              .reduce((sum, hole) => sum + (hole.par || 0), 0);
-      const courseRating =
-        holesCount === 9
-          ? selected.front_course_rating
-          : selected.course_rating;
-      const slopeRating =
-        holesCount === 9 ? selected.front_slope_rating : selected.slope_rating;
-      if (!courseRating || !slopeRating) {
-        acc[playerId] = card.player?.handicap ?? "-";
-        return acc;
-      }
-      acc[playerId] = Math.round(
-        (card.player?.handicap || 0) * (slopeRating / 113) +
-          (courseRating - parTotal)
+      acc[playerId] = getCourseHandicapForRound(
+        selected,
+        round,
+        card.player?.handicap || 0
       );
       return acc;
     }, {});
@@ -450,8 +438,20 @@ export default function RoundDetailPage() {
     }
     const holesCount = round?.holes || 18;
     const handicaps = getHoleHandicapsForCard(card);
+    const playerId = card.player?._id?.toString();
+    const fallbackHandicap =
+      (playerId ? courseHandicapByPlayer[playerId] : undefined) ??
+      card.player?.handicap ??
+      0;
+    const courseHandicap = Number.isFinite(card.courseHandicap)
+      ? card.courseHandicap
+      : fallbackHandicap;
+    const relativeHandicap = Math.max(
+      0,
+      courseHandicap - (Number.isFinite(minCourseHandicap) ? minCourseHandicap : 0)
+    );
     const strokesMap = buildStrokesMap(
-      card.player?.handicap || 0,
+      relativeHandicap,
       handicaps,
       holesCount
     );
@@ -574,6 +574,85 @@ export default function RoundDetailPage() {
     }
   };
 
+  const handleExportRound = async () => {
+    if (!params?.id) {
+      return;
+    }
+    setExportingRound(true);
+    try {
+      const res = await fetch(`/api/rounds/${params.id}/export`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo exportar la jugada.");
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeName = (courseName || "jugada")
+        .replace(/[^a-z0-9_-]+/gi, "-")
+        .toLowerCase();
+      link.href = url;
+      link.download = `gml-round-${safeName}-${params.id}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notifications.show({
+        title: "Jugada exportada",
+        message: "Archivo generado correctamente.",
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo exportar",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setExportingRound(false);
+    }
+  };
+
+
+  const handleRemovePlayer = async () => {
+    if (!params?.id || !removePlayerId) {
+      return;
+    }
+    setRemovingPlayer(true);
+    try {
+      const res = await fetch(
+        `/api/rounds/${params.id}/players/${removePlayerId}/remove`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo eliminar el jugador.");
+      }
+      const updated = await fetch(`/api/rounds/${params.id}`).then((r) =>
+        r.json()
+      );
+      setRound(updated);
+      loadScorecards();
+      setRemovePlayerOpen(false);
+      setRemovePlayerId("");
+      notifications.show({
+        title: "Jugador eliminado",
+        message: "Se removio de la jugada correctamente.",
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo eliminar",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setRemovingPlayer(false);
+    }
+  };
+
   const handleAccept = async (scorecardId) => {
     if (!params?.id) {
       return;
@@ -620,6 +699,7 @@ export default function RoundDetailPage() {
       if (Array.isArray(data.payments)) {
         setOptimizedTransfers(minimizeTransfers(data.payments));
       }
+      loadScorecards();
       notifications.show({
         title: "Pagos calculados",
         message: "",
@@ -802,6 +882,43 @@ export default function RoundDetailPage() {
             ))
           )}
         </Modal>
+        <Modal
+          opened={removePlayerOpen}
+          onClose={() => setRemovePlayerOpen(false)}
+          title="Eliminar jugador"
+          centered
+        >
+          {players.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              No hay jugadores en la jugada.
+            </Text>
+          ) : (
+            <>
+              <Text size="sm" c="dusk.6" mb="sm">
+                Selecciona al jugador que deseas eliminar.
+              </Text>
+              <Select
+                data={players.map((player) => ({
+                  value: player._id,
+                  label: player.name,
+                }))}
+                value={removePlayerId}
+                onChange={(value) => setRemovePlayerId(value || "")}
+                placeholder="Selecciona jugador"
+                mb="md"
+              />
+              <Button
+                color="clay"
+                fullWidth
+                onClick={handleRemovePlayer}
+                loading={removingPlayer}
+                disabled={!removePlayerId}
+              >
+                Confirmar eliminacion
+              </Button>
+            </>
+          )}
+        </Modal>
         <Card mb="lg">
           <Group justify="space-between">
             <div>
@@ -840,6 +957,16 @@ export default function RoundDetailPage() {
               {canApprove && !isClosed ? (
                 <Button
                   size="xs"
+                  variant="light"
+                  color="clay"
+                  onClick={() => setRemovePlayerOpen(true)}
+                >
+                  Eliminar jugador
+                </Button>
+              ) : null}
+              {canApprove && !isClosed ? (
+                <Button
+                  size="xs"
                   color="club"
                   onClick={handleSettle}
                   loading={settling}
@@ -866,6 +993,16 @@ export default function RoundDetailPage() {
                   disabled={!allAccepted}
                 >
                   Cerrar jugada
+                </Button>
+              ) : null}
+              {isAdmin ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={handleExportRound}
+                  loading={exportingRound}
+                >
+                  Exportar
                 </Button>
               ) : null}
               {isAdmin ? (
