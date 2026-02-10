@@ -27,6 +27,7 @@ export default function UsersPage() {
     grintId: "",
     role: "player",
     password: "",
+    defaultTeeName: "BLANCAS",
   });
   const [saving, setSaving] = useState(false);
   const nameInputRef = useRef(null);
@@ -67,6 +68,7 @@ export default function UsersPage() {
       grintId: user.grintId || "",
       role: user.role || "player",
       password: "",
+      defaultTeeName: user.defaultTeeName || "BLANCAS",
     });
     setTimeout(() => {
       nameInputRef.current?.focus();
@@ -89,14 +91,15 @@ export default function UsersPage() {
     }
     setSaving(true);
     try {
-        const payload = {
-          name: form.name,
-          phone: form.phone,
-          handicap: Number(form.handicap || 0),
-          grintId: form.grintId || "",
-          role: form.role,
-          password: form.password || undefined,
-        };
+      const payload = {
+        name: form.name,
+        phone: form.phone,
+        handicap: Number(form.handicap || 0),
+        grintId: form.grintId || "",
+        role: form.role,
+        password: form.password || undefined,
+        defaultTeeName: form.defaultTeeName || "",
+      };
       const res = creating
         ? await fetch("/api/users", {
             method: "POST",
@@ -156,6 +159,7 @@ export default function UsersPage() {
                   grintId: "",
                   role: "player",
                   password: "",
+                  defaultTeeName: "BLANCAS",
                 });
               }}
             >
@@ -210,6 +214,20 @@ export default function UsersPage() {
               }
             />
             <Select
+              label="Tee de salida (default)"
+              placeholder="Selecciona tee"
+              value={form.defaultTeeName}
+              onChange={(value) => updateForm({ defaultTeeName: value })}
+              data={[
+                { value: "BLANCAS", label: "BLANCAS" },
+                { value: "AZULES", label: "AZULES" },
+                { value: "DORADAS", label: "DORADAS" },
+                { value: "NEGRAS", label: "NEGRAS" },
+                { value: "PLATEADAS", label: "PLATEADAS" },
+                { value: "ROJAS", label: "ROJAS" },
+              ]}
+            />
+            <Select
               label="Rol"
               value={form.role}
               onChange={(value) => updateForm({ role: value })}
@@ -242,6 +260,7 @@ export default function UsersPage() {
                       grintId: "",
                       role: "player",
                       password: "",
+                      defaultTeeName: "BLANCAS",
                     });
                     return;
                   }
@@ -274,7 +293,7 @@ export default function UsersPage() {
                 <div>
                   <Text fw={600}>{user.name}</Text>
                   <Text size="sm" c="dusk.6">
-                    {user.phone} · HC {user.handicap ?? 0} · {user.role} · ID Grint: {user.grintId}
+                    {user.phone} · HC {user.handicap ?? 0} · {user.role} · Tee: {user.defaultTeeName || "BLANCAS"} · ID Grint: {user.grintId}
                   </Text>
                 </div>
                 <Button

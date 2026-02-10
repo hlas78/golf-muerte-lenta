@@ -31,6 +31,7 @@ export default function AppShell({
     }
     if (userRole === "admin") {
       items.push({ label: "Config", href: "/settings" });
+      items.push({ label: "Descarga campo", href: "/admin/course-download" });
     }
     if (userRole) {
       items.push({ label: "TheGrint", href: "/grint" });

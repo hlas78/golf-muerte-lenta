@@ -30,7 +30,9 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  console.log(request)
   const body = await request.json();
+  console.log(body)
   const updates = {};
 
   if (body.name) {
@@ -55,11 +57,19 @@ export async function PATCH(request, { params }) {
   if (body.grintId != null) {
     updates.grintId = String(body.grintId).trim();
   }
+  if (body.defaultTeeName != null) {
+    const nextTee = String(body.defaultTeeName).trim();
+    console.log('nextTee ', nextTee)
+    updates.defaultTeeName = nextTee ? nextTee.toUpperCase() : null;
+  }
   if (body.password) {
     updates.passwordHash = await hashPassword(body.password);
   }
 
-  await User.updateOne({ _id: id }, updates);
+  console.log('updates', updates)
+  console.log(await User.updateOne({ _id: id }, updates));
+  console.log('after')
+  console.log(await User.findById(id))
 
   if (body.handicap != null) {
     const rounds = await Round.find({

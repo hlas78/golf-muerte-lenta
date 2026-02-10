@@ -38,6 +38,9 @@ export async function POST(request) {
   }
   const payload = await request.json();
   const passwordHash = await hashPassword(payload.password || "gml1234");
+  const defaultTeeName = payload.defaultTeeName
+    ? String(payload.defaultTeeName).trim().toUpperCase()
+    : "BLANCAS";
   const user = await User.create({
     name: payload.name,
     phone: payload.phone,
@@ -45,6 +48,7 @@ export async function POST(request) {
     role: payload.role || "player",
     handicap: payload.handicap || 0,
     status: payload.status || "active",
+    defaultTeeName,
   });
   return NextResponse.json({ id: user._id });
 }

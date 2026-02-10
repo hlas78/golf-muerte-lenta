@@ -29,8 +29,27 @@ export async function GET(request) {
 
   try {
     const result = await withGrintPage(async ({ page }) => {
-      const url = `https://thegrint.com/score/edit_score/${scoreId}`;
+      const url = `https://thegrint.com/score/edit_score/${scoreId}?handicap_company_id=7`;
       await page.goto(url, { waitUntil: "domcontentloaded" });
+      console.log(`Descarga tarjeta ${url}`);
+      try {
+        const dismiss = page.locator(
+          'a.mb-2.px-4[aria-label="Close"][data-dismiss="modal"]'
+        );
+        if (await dismiss.first().isVisible({ timeout: 1000 })) {
+          await dismiss.first().click();
+          await page.waitForTimeout(500);
+          const viewLink = page.locator("a.link-score.view-link-score");
+          if (await viewLink.first().isVisible({ timeout: 1500 })) {
+            await viewLink.first().click();
+            await page.waitForTimeout(500);
+          } else {
+            await page.goto(url, { waitUntil: "domcontentloaded" });
+          }
+        }
+      } catch {
+        // ignore modal if not present
+      }
       const html = await page.content();
       return parseScorecardHtml(html);
     });

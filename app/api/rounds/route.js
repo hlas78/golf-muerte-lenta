@@ -80,26 +80,39 @@ export async function POST(request) {
   if (playerIds.length > 0) {
     const tees = course?.tees || {};
     const allTees = [...(tees.male || []), ...(tees.female || [])];
-    const defaultTeeName = allTees[0]?.tee_name || round.teeName || "";
+    const defaultTeeName =
+      allTees.find((option) => option.tee_name === "BLANCAS")?.tee_name ||
+      allTees[0]?.tee_name ||
+      round.teeName ||
+      "";
+    const participants = await User.find({ _id: { $in: playerIds } });
+    const teeByPlayer = new Map();
+    participants.forEach((player) => {
+      const preferred = String(player.defaultTeeName || "").toUpperCase();
+      const valid =
+        preferred && allTees.find((option) => option.tee_name === preferred);
+      teeByPlayer.set(
+        String(player._id),
+        valid?.tee_name || defaultTeeName
+      );
+    });
     round.playerTees = playerIds.map((playerId) => ({
       player: playerId,
-      teeName: defaultTeeName,
+      teeName: teeByPlayer.get(String(playerId)) || defaultTeeName,
     }));
     round.status = "active";
     await round.save();
-
-    const participants = await User.find({ _id: { $in: playerIds } });
-    const teeForHandicap =
-      allTees.find((option) => option.tee_name === defaultTeeName) ||
-      allTees[0];
 
     await Scorecard.insertMany(
       participants.map((player) => ({
         round: round._id,
         player: player._id,
-        teeName: defaultTeeName,
+        teeName: teeByPlayer.get(String(player._id)) || defaultTeeName,
         courseHandicap: getCourseHandicapForRound(
-          teeForHandicap,
+          allTees.find(
+            (option) =>
+              option.tee_name === teeByPlayer.get(String(player._id))
+          ) || allTees[0],
           round,
           player.handicap
         ),

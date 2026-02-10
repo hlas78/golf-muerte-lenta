@@ -95,7 +95,6 @@ export async function POST(request) {
   }
 
   const keepOpen = Boolean(process.env.GRINT_UPLOAD_KEEP_OPEN);
-  const headless = Boolean(process.env.GRINT_HEADLESS);
   try {
     await withGrintUserPage(
       actor,
@@ -219,7 +218,7 @@ export async function POST(request) {
           page.locator("a.tg-button-submit.submit").click(),
         ]);
       },
-      { headless, keepOpen }
+      { headless: !(process.env.GRINT_SHOW_BROWSER || false), keepOpen }
     );
     console.log('Tarjeta guardada')
     scorecard.grintUploadedAt = new Date();

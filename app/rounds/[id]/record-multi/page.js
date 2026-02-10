@@ -490,6 +490,23 @@ export default function RecordMultiPage() {
               Ver tarjeta
             </Button>
           </Group>
+          <Group justify="space-between" mt="md">
+            <Button
+              variant="club"
+              onClick={() => stepHole(-1)}
+              disabled={Number(selectedHole) <= 1 || saving}
+            >
+              Anterior
+            </Button>
+            <Button
+              color="club"
+              onClick={() => stepHole(1)}
+              disabled={Number(selectedHole) >= (round?.holes || 9) || saving}
+              loading={saving}
+            >
+              Siguiente
+            </Button>
+          </Group>
         </Card>
 
         {selectedCards.length === 0 ? (

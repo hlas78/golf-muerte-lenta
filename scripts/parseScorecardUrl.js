@@ -131,7 +131,7 @@ async function loadHtml(target) {
     } catch {
       hasStorageState = false;
     }
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({ headless: !(process.env.GRINT_SHOW_BROWSER || false), keepOpen: true });
     const context = await browser.newContext(
       hasStorageState ? { storageState: storageStatePath } : {}
     );

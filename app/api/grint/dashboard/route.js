@@ -11,71 +11,77 @@ function stripTags(value) {
   return value.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 }
 
-function parseDashboardScores(html, grintId) {
+function parseScoresTable(html) {
   const results = [];
-  const containerPattern =
-    /<div class="row justify-content-center newsfeed-container[\s\S]*?>/gi;
-  const containerIndices = [];
-  let containerMatch = containerPattern.exec(html);
-  while (containerMatch) {
-    containerIndices.push(containerMatch.index);
-    containerMatch = containerPattern.exec(html);
+  const scriptPattern = /scoresArray\.unshift\(\{([\s\S]*?)\}\);/gi;
+  let scriptMatch = scriptPattern.exec(html);
+  while (scriptMatch) {
+    const block = scriptMatch[1];
+    const fields = {};
+    const fieldPattern = /([a-zA-Z0-9_]+)\s*:\s*('([^']*)'|([^,]+))/g;
+    let fieldMatch = fieldPattern.exec(block);
+    while (fieldMatch) {
+      const key = fieldMatch[1];
+      const value = fieldMatch[3] != null ? fieldMatch[3] : fieldMatch[4];
+      fields[key] = typeof value === "string" ? value.trim() : value;
+      fieldMatch = fieldPattern.exec(block);
+    }
+    if (fields.scoreId) {
+      results.push({
+        scoreId: String(fields.scoreId),
+        url: `https://thegrint.com/score/edit_score/${fields.scoreId}?handicap_company_id=7`,
+        date: fields.date || null,
+        course: fields.courseName || null,
+        teeInfo: fields.tees || null,
+        score: fields.score != null ? String(fields.score) : null,
+        holes: fields.scoreType || null,
+        putts: null,
+      });
+    }
+    scriptMatch = scriptPattern.exec(html);
   }
-  const chunks = containerIndices.length
-    ? containerIndices.map((start, idx) => {
-        const end =
-          idx + 1 < containerIndices.length
-            ? containerIndices[idx + 1]
-            : html.length;
-        return html.slice(start, end);
-      })
-    : [html];
+  if (results.length > 0) {
+    return results;
+  }
 
-  const userPattern = new RegExp(
-    `<a[^>]*href="https://thegrint\\.com/profile/index/(\\d+)"[^>]*class="[^"]*newsfeed-link-user[^"]*"[^>]*>([\\s\\S]*?)</a>`,
-    "i"
-  );
-  const messagePattern = new RegExp(
-    `<a[^>]*class="[^"]*newsfeed-link-message[^"]*"[^>]*href="(https://thegrint\\.com/score/edit_score/(\\d+))"[^>]*>([\\s\\S]*?)</a>`,
-    "i"
-  );
-  const datePattern = /<span[^>]*class="[^"]*newsfeed-date[^"]*"[^>]*>([\s\S]*?)<\/span>/i;
-
-  for (const chunk of chunks) {
-    const userMatch = userPattern.exec(chunk);
-    if (!userMatch) {
-      continue;
-    }
-    const userId = userMatch[1];
-    if (String(userId) !== String(grintId)) {
-      continue;
-    }
-    const userLabel = stripTags(userMatch[2]);
-    const messageMatch = messagePattern.exec(chunk);
-    if (!messageMatch) {
-      continue;
-    }
-    const url = messageMatch[1];
-    const scoreId = messageMatch[2];
-    const messageHtml = messageMatch[3];
-    const messageText = stripTags(messageHtml);
-    const scoreMatch = messageHtml.match(
-      /<span[^>]*id="score"[^>]*>([^<]+)<\/span>/i
+  const rowPattern = /<tr class=" clickable-row">([\s\S]*?)<\/tr>/gi;
+  let rowMatch = rowPattern.exec(html);
+  while (rowMatch) {
+    const rowHtml = rowMatch[1];
+    const linkMatch = rowHtml.match(
+      /href="https:\/\/thegrint\.com\/score\/edit_score\/(\d+)[^"]*"/i
     );
-    const scoreValue = scoreMatch ? stripTags(scoreMatch[1]) : null;
-    const atMatch = messageText.match(/at\s+(.+)$/i);
-    const course = atMatch ? atMatch[1].trim() : null;
-    const dateMatch = datePattern.exec(chunk);
-    const dateText = dateMatch ? stripTags(dateMatch[1]) : null;
+    if (!linkMatch) {
+      rowMatch = rowPattern.exec(html);
+      continue;
+    }
+    const scoreId = linkMatch[1];
+    const urlMatch = rowHtml.match(
+      /href="(https:\/\/thegrint\.com\/score\/edit_score\/\d+[^\"]*)"/i
+    );
+    const url = urlMatch ? urlMatch[1] : null;
+    const tds = Array.from(rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)).map(
+      (match) => match[1]
+    );
+    const date = tds[0] || null;
+    const courseCell = tds[1] || "";
+    const course = stripTags(courseCell.replace(/<p[\s\S]*?<\/p>/gi, ""));
+    const teeMatch = rowHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+    const teeInfo = teeMatch ? stripTags(teeMatch[1]) : null;
+    const score = stripTags(tds[2] || "");
+    const holes = stripTags(tds[3] || "");
+    const putts = stripTags(tds[4] || "");
     results.push({
       scoreId,
       url,
-      user: userLabel,
-      score: scoreValue,
+      date,
       course,
-      message: messageText,
-      date: dateText,
+      teeInfo,
+      score,
+      holes,
+      putts,
     });
+    rowMatch = rowPattern.exec(html);
   }
   return results;
 }
@@ -110,22 +116,41 @@ export async function GET(request) {
       await page.goto("https://thegrint.com/dashboard", {
         waitUntil: "domcontentloaded",
       });
+      const payload = new URLSearchParams({
+        wave: "1",
+        wave18: "0",
+        wave9: "0",
+        userId: String(grintId),
+        courseId: "",
+        typeScore: "0",
+        handicap_company_id: "7",
+      }).toString();
+      console.log(`Get More Scores https://thegrint.com/score/listMoreScores?${payload}`)
+      const response = await page.request.post(
+        "https://thegrint.com/score/listMoreScores",
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          },
+          data: payload,
+        }
+      );
       try {
-        await page.waitForSelector("div.newsfeed-container", {
-          timeout: 15000,
-        });
-      } catch {
-        // Fallback: some dashboards render a loading label first.
-        await page.waitForFunction(
-          () =>
-            !document.body.innerText.toLowerCase().includes("Loading") &&
-            document.querySelectorAll("div.newsfeed-container").length > 0,
-          null,
-          { timeout: 10000 }
+        const dismiss = page.locator(
+          'a.mb-2.px-4[aria-label="Close"][data-dismiss="modal"]'
         );
+        if (await dismiss.first().isVisible({ timeout: 5000 })) {
+          await dismiss.first().click();
+          await page.waitForTimeout(500);
+        }
+      } catch {
+        // ignore modal if not present
       }
-      const html = await page.content();
-      return parseDashboardScores(html, grintId);
+      console.log(await response.text())
+      const fs = require('fs')
+      fs.writeFileSync('/Users/hector/Documents/Code/Golf/golf-muerte-lenta/rounds', await response.text())
+      const html = await response.text();
+      return parseScoresTable(html);
     });
     return NextResponse.json({ scores });
   } catch (error) {

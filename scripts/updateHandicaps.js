@@ -151,7 +151,7 @@ async function run() {
 
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const storageStatePath = path.join(scriptDir, "thegrint-storage.json");
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: !(process.env.GRINT_SHOW_BROWSER || false) });
   const context = await browser.newContext(
     fs.existsSync(storageStatePath) ? { storageState: storageStatePath } : {}
   );

@@ -668,12 +668,17 @@ export default function RecordScorecardPage() {
                       {score.date}
                     </Text>
                   ) : null}
-                  <Text size="sm" c="dusk.6">
-                    {score.message || score.url}
-                  </Text>
+                  {score.teeInfo ? (
+                    <Text size="xs" c="dusk.6">
+                      {score.teeInfo}
+                    </Text>
+                  ) : null}
                   <Group justify="space-between" mt="sm">
                     <Badge color="club" variant="light">
                       {score.score ? `Score ${score.score}` : "Score"}
+                    </Badge>
+                    <Badge color="dusk" variant="light">
+                      {score.holes ? `${score.holes} hoyos` : "Hoyos"}
                     </Badge>
                     <Button
                       size="xs"
