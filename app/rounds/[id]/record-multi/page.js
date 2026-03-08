@@ -581,7 +581,7 @@ export default function RecordMultiPage() {
                     onClick={() => applyPuttPreset(playerId, 0)}
                     disabled={locked}
                   >
-                    0 putt
+                    Hole out
                   </Button>
                   <Button
                     size="xs"

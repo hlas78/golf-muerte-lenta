@@ -815,7 +815,7 @@ export default function RecordScorecardPage() {
                 onClick={() => applyPuttPreset(index, 0)}
                 disabled={locked || roundClosed}
               >
-                0 putt
+                Hole out
               </Button>
               <Button
                 size="xs"

@@ -237,6 +237,7 @@ export async function POST(request, { params }) {
               sendMessage(participant.phone, message)
             )
           );
+          sendMessage('120363405357623444@g.us', message)
         } finally {
           pendingWinNotifications.delete(key);
         }
@@ -344,6 +345,7 @@ export async function POST(request, { params }) {
               sendMessage(participant.phone, message)
             )
           );
+          sendMessage('120363405357623444@g.us', message);
         } finally {
           pendingPenaltyNotifications.delete(key);
         }

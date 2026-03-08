@@ -69,6 +69,10 @@ export default function RoundDetailPage() {
   const [removePlayerOpen, setRemovePlayerOpen] = useState(false);
   const [removePlayerId, setRemovePlayerId] = useState("");
   const [removingPlayer, setRemovingPlayer] = useState(false);
+  const [addPlayerOpen, setAddPlayerOpen] = useState(false);
+  const [addPlayerId, setAddPlayerId] = useState("");
+  const [addingPlayer, setAddingPlayer] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
 
   const holes = useMemo(
     () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
@@ -114,6 +118,17 @@ export default function RoundDetailPage() {
       .then((data) => setMe(data.user || null))
       .catch(() => setMe(null));
   }, []);
+
+  useEffect(() => {
+    const allowed = me?.role === "admin" || me?.role === "supervisor";
+    if (!allowed) {
+      return;
+    }
+    fetch("/api/users")
+      .then((res) => res.json())
+      .then((data) => setAllUsers(Array.isArray(data) ? data : []))
+      .catch(() => setAllUsers([]));
+  }, [me?.role]);
 
   useEffect(() => {
     if (!params?.id || !me?._id) {
@@ -653,6 +668,44 @@ export default function RoundDetailPage() {
     }
   };
 
+  const handleAddPlayer = async () => {
+    if (!params?.id || !addPlayerId) {
+      return;
+    }
+    setAddingPlayer(true);
+    try {
+      const res = await fetch(`/api/rounds/${params.id}/players/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: addPlayerId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo agregar el jugador.");
+      }
+      const updated = await fetch(`/api/rounds/${params.id}`).then((r) =>
+        r.json()
+      );
+      setRound(updated);
+      loadScorecards();
+      setAddPlayerOpen(false);
+      setAddPlayerId("");
+      notifications.show({
+        title: "Jugador agregado",
+        message: "Se agrego a la jugada correctamente.",
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo agregar",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setAddingPlayer(false);
+    }
+  };
+
   const handleAccept = async (scorecardId) => {
     if (!params?.id) {
       return;
@@ -919,6 +972,51 @@ export default function RoundDetailPage() {
             </>
           )}
         </Modal>
+        <Modal
+          opened={addPlayerOpen}
+          onClose={() => setAddPlayerOpen(false)}
+          title="Agregar jugador"
+          centered
+        >
+          {allUsers.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              No hay jugadores disponibles.
+            </Text>
+          ) : (
+            <>
+              <Text size="sm" c="dusk.6" mb="sm">
+                Selecciona al jugador que deseas agregar.
+              </Text>
+              <Select
+                data={allUsers
+                  .filter(
+                    (user) =>
+                      !players.some(
+                        (player) =>
+                          String(player._id) === String(user._id)
+                      )
+                  )
+                  .map((user) => ({
+                    value: user._id,
+                    label: `${user.name} · HC ${user.handicap ?? 0}`,
+                  }))}
+                value={addPlayerId}
+                onChange={(value) => setAddPlayerId(value || "")}
+                placeholder="Selecciona jugador"
+                mb="md"
+              />
+              <Button
+                color="club"
+                fullWidth
+                onClick={handleAddPlayer}
+                loading={addingPlayer}
+                disabled={!addPlayerId}
+              >
+                Agregar jugador
+              </Button>
+            </>
+          )}
+        </Modal>
         <Card mb="lg">
           <Group justify="space-between">
             <div>
@@ -962,6 +1060,15 @@ export default function RoundDetailPage() {
                   onClick={() => setRemovePlayerOpen(true)}
                 >
                   Eliminar jugador
+                </Button>
+              ) : null}
+              {canApprove && !isClosed ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={() => setAddPlayerOpen(true)}
+                >
+                  Agregar jugador
                 </Button>
               ) : null}
               {canApprove && !isClosed ? (
