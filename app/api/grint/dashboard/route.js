@@ -147,8 +147,8 @@ export async function GET(request) {
         // ignore modal if not present
       }
       console.log(await response.text())
-      const fs = require('fs')
-      fs.writeFileSync('/Users/hector/Documents/Code/Golf/golf-muerte-lenta/rounds', await response.text())
+      // const fs = require('fs')
+      // fs.writeFileSync('/Users/hector/Documents/Code/Golf/golf-muerte-lenta/rounds', await response.text())
       const html = await response.text();
       return parseScoresTable(html);
     });

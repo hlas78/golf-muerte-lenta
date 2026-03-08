@@ -94,7 +94,10 @@ export async function POST(request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const keepOpen = Boolean(process.env.GRINT_UPLOAD_KEEP_OPEN);
+  const keepOpen = !Boolean(process.env.GRINT_UPLOAD_KEEP_OPEN);
+  const headless = !(Boolean(process.env.GRINT_SHOW_BROWSER) || false)
+  console.log('HEADLSES: ', headless)
+  console.log('keepOpen: ', keepOpen)
   try {
     await withGrintUserPage(
       actor,
@@ -214,11 +217,11 @@ export async function POST(request) {
         }
 
         await Promise.all([
-          page.waitForURL("https://thegrint.com/score", { timeout: 20000 }),
+          // page.waitForURL("https://thegrint.com/score/add_full_score", { timeout: 20000 }),
           page.locator("a.tg-button-submit.submit").click(),
         ]);
       },
-      { headless: !(process.env.GRINT_SHOW_BROWSER || false), keepOpen }
+      { headless: false, keepOpen }
     );
     console.log('Tarjeta guardada')
     scorecard.grintUploadedAt = new Date();
