@@ -19,7 +19,7 @@ export async function POST(request) {
   const name = String(payload.name || "").trim();
   const handicap = Number(payload.handicap);
 
-  if (!/^\d{10}$/.test(phone)) {
+  if (!/^\d{8,13}$/.test(phone)) {
     return NextResponse.json(
       { error: "Telefono invalido" },
       { status: 400 }

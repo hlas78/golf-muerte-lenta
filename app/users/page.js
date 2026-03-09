@@ -81,10 +81,10 @@ export default function UsersPage() {
 
   const handleSave = async (event) => {
     event.preventDefault();
-    if (!/^\d{10}$/.test(form.phone)) {
+    if (!/^\d{8,13}$/.test(form.phone)) {
       notifications.show({
         title: "Telefono invalido",
-        message: "Debe tener 10 digitos.",
+        message: "Debe tener entre 8 y 13 digitos.",
         color: "clay",
       });
       return;
@@ -191,7 +191,7 @@ export default function UsersPage() {
             <TextInput
               label="Telefono"
               placeholder="5512345678"
-              description="10 digitos"
+              description="8 a 13 digitos"
               value={form.phone}
               onChange={(event) =>
                 updateForm({ phone: event.currentTarget.value })

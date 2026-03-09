@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 async function sendMessage(to, message) {
-console.log(`sendMessage ${to}: ${message}`);
+  console.log(`sendMessage ${to}: ${message}`);
   if (to.startsWith('00'))
     return
   const auth = {
@@ -12,7 +12,7 @@ console.log(`sendMessage ${to}: ${message}`);
     try {
       const data = {
         token: "alertas_opcionguik",
-        to: `521${to}`,
+        to: `${to}`,
         message
       };
       axios

@@ -40,7 +40,7 @@ export async function PATCH(request, { params }) {
   }
   if (body.phone) {
     const phone = String(body.phone).trim();
-    if (!/^\d{10}$/.test(phone)) {
+    if (!/^\d{8,13}$/.test(phone)) {
       return NextResponse.json(
         { error: "Telefono invalido" },
         { status: 400 }

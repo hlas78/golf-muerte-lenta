@@ -93,7 +93,7 @@ export default function LoginPage() {
             <TextInput
               label="Teléfono"
               placeholder="5512345678"
-              description="10 digitos"
+              description="8 a 13 digitos"
               value={phone}
               onChange={(event) => setPhone(event.currentTarget.value)}
               required
@@ -126,7 +126,7 @@ export default function LoginPage() {
             <TextInput
               label="Teléfono para registro"
               placeholder="5512345678"
-              description="10 digitos"
+              description="8 a 13 digitos"
               value={registerPhone}
               onChange={(event) => setRegisterPhone(event.currentTarget.value)}
               required
