@@ -20,7 +20,15 @@ const PENALTIES = [
   { value: "saltapatras", label: "Saltapatras" },
   { value: "paloma", label: "Paloma" },
   { value: "whiskeys", label: "Whiskeys" },
+  { value: "berrinche", label: "Berrinche" },
 ];
+
+const togglePenaltyValue = (penalties, penalty) => {
+  const base = Array.isArray(penalties) ? penalties : [];
+  return base.includes(penalty)
+    ? base.filter((item) => item !== penalty)
+    : [...base, penalty];
+};
 
 const buildEmptyHoles = (count) =>
   Array.from({ length: count }, (_, idx) => ({
@@ -433,12 +441,12 @@ export default function RecordMultiPage() {
   );
 
   return (
-    <main>
+    <main className="gml-scorecard-compact">
       <AppShell
         title="Captura por hoyo"
         // subtitle="Selecciona jugadores y registra un hoyo a la vez."
       >
-        <Card mb="lg">
+        <Card mb="sm" p="sm">
           <MultiSelect
             label="Jugadores"
             placeholder="Selecciona participantes"
@@ -449,7 +457,7 @@ export default function RecordMultiPage() {
             clearable
             disabled={isClosed}
           />
-          <Group align="flex-end" mt="md">
+          <Group align="flex-end" mt="xs">
             <Button
               variant="light"
               onClick={() =>
@@ -474,7 +482,7 @@ export default function RecordMultiPage() {
               onChange={setSelectedHole}
             />
           </Group>
-          <Group justify="space-between" mt="md">
+          <Group justify="space-between" mt="xs">
             <Button
               variant="light"
               component="a"
@@ -490,7 +498,7 @@ export default function RecordMultiPage() {
               Ver tarjeta
             </Button>
           </Group>
-          <Group justify="space-between" mt="md">
+          <Group justify="space-between" mt="xs">
             <Button
               variant="club"
               onClick={() => stepHole(-1)}
@@ -510,7 +518,7 @@ export default function RecordMultiPage() {
         </Card>
 
         {selectedCards.length === 0 ? (
-          <Card>
+          <Card p="sm">
             <Text size="sm" c="dusk.6">
               Selecciona jugadores para comenzar la captura.
             </Text>
@@ -524,8 +532,8 @@ export default function RecordMultiPage() {
             const locked = card.accepted || isClosed;
             const cardKey = playerId || card._id || `${idx}-${holeNumber}`;
             return (
-              <Card key={cardKey} mb="lg">
-                <Group justify="space-between" mb="sm">
+              <Card key={cardKey} mb="sm" p="sm">
+                <Group justify="space-between" mb="xs">
                   <div>
                     <Text fw={700}>{card.player?.name || "Jugador"}</Text>
                     <Text size="sm" c="dusk.6">
@@ -536,11 +544,11 @@ export default function RecordMultiPage() {
                     {locked ? "Bloqueada" : "Editable"}
                   </Badge>
                 </Group>
-                <Text size="sm" c="dusk.6" mb="sm">
+                <Text size="sm" c="dusk.6" mb="xs">
                   Hoyo {holeNumber} · Par {meta.par ?? "-"} · {meta.yardage ?? "--"} yds · HC{" "}
                   {meta.handicap ?? "--"}
                 </Text>
-                <Group gap="xs" mb="sm">
+                <Group gap="xs" mb="xs">
                   <Button
                     size="xs"
                     variant="light"
@@ -574,7 +582,7 @@ export default function RecordMultiPage() {
                     Zopi
                   </Button>
                 </Group>
-                <Group gap="xs" mb="sm">
+                <Group gap="xs" mb="xs">
                   <Button
                     size="xs"
                     variant="light"
@@ -608,7 +616,7 @@ export default function RecordMultiPage() {
                     3 putt
                   </Button>
                 </Group>
-                <Group grow align="flex-start" mb="sm">
+                <Group grow align="flex-start" mb="xs" gap="xs">
                   <div className="gml-stepper">
                     <Text size="sm" fw={600}>
                       Golpes
@@ -658,7 +666,7 @@ export default function RecordMultiPage() {
                     </div>
                   </div>
                 </Group>
-                <Group gap="xs" mb="sm">
+                <Group gap="xs" mb="xs">
                   <Button
                     size="xs"
                     variant={entry?.water ? "filled" : "light"}
@@ -667,6 +675,7 @@ export default function RecordMultiPage() {
                       updatePlayerHole(playerId, { water: !entry?.water })
                     }
                     disabled={locked}
+                    className="gml-score-btn"
                   >
                     Wet
                   </Button>
@@ -679,6 +688,7 @@ export default function RecordMultiPage() {
                         updatePlayerHole(playerId, { ohYes: !entry?.ohYes })
                       }
                       disabled={locked}
+                      className="gml-score-btn"
                     >
                       Oh yes
                     </Button>
@@ -691,21 +701,41 @@ export default function RecordMultiPage() {
                       updatePlayerHole(playerId, { sandy: !entry?.sandy })
                     }
                     disabled={locked}
+                    className="gml-score-btn"
                   >
                     Sandy
                   </Button>
                 </Group>
-                <MultiSelect
-                  label="Castigos"
-                  data={PENALTIES}
-                  value={entry?.penalties || []}
-                  onChange={(value) =>
-                    updatePlayerHole(playerId, { penalties: value })
-                  }
-                  placeholder="Selecciona"
-                  clearable
-                  disabled={locked}
-                />
+                <div style={{ marginTop: "0.75rem" }}>
+                  <Text size="sm" fw={600} mb={6}>
+                    Castigos
+                  </Text>
+                  <Group gap="xs">
+                    {PENALTIES.map((penalty) => {
+                      const active = entry?.penalties?.includes(penalty.value);
+                      return (
+                        <Button
+                          key={penalty.value}
+                          size="xs"
+                          variant={active ? "filled" : "light"}
+                          color={active ? "clay" : "dusk"}
+                          onClick={() =>
+                            updatePlayerHole(playerId, {
+                              penalties: togglePenaltyValue(
+                                entry?.penalties,
+                                penalty.value
+                              ),
+                            })
+                          }
+                          disabled={locked}
+                          className="gml-score-btn"
+                        >
+                          {penalty.label}
+                        </Button>
+                      );
+                    })}
+                  </Group>
+                </div>
               </Card>
             );
           })

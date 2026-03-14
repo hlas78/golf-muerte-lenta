@@ -215,7 +215,7 @@ export default function Home() {
                     </Text>
                   ) : null}
                   <Text size="sm" c="dusk.6">
-                    Inicio: {formatRoundDate(round.createdAt)}
+                    Inicio: {formatRoundDate(round.startedAt || round.createdAt)}
                   </Text>
                   {/* <Text size="sm" c="dusk.6">
                     Supervisa: {round.supervisor?.name || "Por asignar"}

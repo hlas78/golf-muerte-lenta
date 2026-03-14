@@ -10,9 +10,26 @@ import {
   Select,
   Text,
   Textarea,
+  TextInput,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../components/AppShell";
+
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const toLocalDateTimeValue = (date) => {
+  if (!date) {
+    return "";
+  }
+  const next = new Date(date);
+  if (Number.isNaN(next.getTime())) {
+    return "";
+  }
+  return [
+    `${next.getFullYear()}-${pad2(next.getMonth() + 1)}-${pad2(next.getDate())}`,
+    `${pad2(next.getHours())}:${pad2(next.getMinutes())}`,
+  ].join("T");
+};
 
 export default function NewRoundPage() {
   const router = useRouter();
@@ -25,6 +42,9 @@ export default function NewRoundPage() {
   const [users, setUsers] = useState([]);
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [description, setDescription] = useState("");
+  const [startedAt, setStartedAt] = useState(() =>
+    toLocalDateTimeValue(new Date())
+  );
 
   useEffect(() => {
     fetch("/api/me")
@@ -94,6 +114,10 @@ export default function NewRoundPage() {
     setLoading(true);
     try {
       const me = await fetch("/api/me").then((res) => res.json());
+      const startedAtValue =
+        startedAt && !Number.isNaN(new Date(startedAt).getTime())
+          ? new Date(startedAt).toISOString()
+          : null;
       const res = await fetch("/api/rounds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -105,6 +129,7 @@ export default function NewRoundPage() {
           supervisor: me.user?._id,
           players: selectedPlayers,
           description: description.trim(),
+          startedAt: startedAtValue,
         }),
       });
       const data = await res.json();
@@ -166,6 +191,12 @@ export default function NewRoundPage() {
               onChange={setSelectedPlayers}
               searchable
               clearable
+            />
+            <TextInput
+              label="Inicio de la jugada"
+              type="datetime-local"
+              value={startedAt}
+              onChange={(event) => setStartedAt(event.currentTarget.value)}
             />
             <Textarea
               label="Descripcion (opcional)"

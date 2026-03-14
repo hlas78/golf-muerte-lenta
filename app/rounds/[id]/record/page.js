@@ -10,7 +10,6 @@ import {
   Modal,
   Stack,
   Select,
-  MultiSelect,
   Loader,
   Text,
 } from "@mantine/core";
@@ -23,7 +22,15 @@ const PENALTIES = [
   { value: "saltapatras", label: "Saltapatras" },
   { value: "paloma", label: "Paloma" },
   { value: "whiskeys", label: "Whiskeys" },
+  { value: "berrinche", label: "Berrinche" },
 ];
+
+const togglePenaltyValue = (penalties, penalty) => {
+  const base = Array.isArray(penalties) ? penalties : [];
+  return base.includes(penalty)
+    ? base.filter((item) => item !== penalty)
+    : [...base, penalty];
+};
 
 export default function RecordScorecardPage() {
   const params = useParams();
@@ -636,7 +643,7 @@ export default function RecordScorecardPage() {
   }, [holes, me, round]);
 
   return (
-    <main>
+    <main className="gml-scorecard-compact">
       <AppShell
         title={
           activePlayerId && String(activePlayerId) !== String(me?._id)
@@ -693,7 +700,7 @@ export default function RecordScorecardPage() {
             </Stack>
           )}
         </Modal>
-        <Card mb="lg">
+        <Card mb="sm" p="sm">
           <Group justify="space-between">
             <Text fw={700}>{title}</Text>
             {/* <Badge color="club">{round?.holes || "--"} hoyos</Badge> */}
@@ -745,7 +752,7 @@ export default function RecordScorecardPage() {
             }}
             disabled={!canEditTee || updatingTee}
           />
-          <Group justify="flex-end" mt="sm">
+          <Group justify="flex-end" mt="xs">
             {!locked && !roundClosed ? (
               <Button variant="light" onClick={openGrintModal}>
                 Cargar desde Grint
@@ -762,7 +769,7 @@ export default function RecordScorecardPage() {
         </Card>
 
         {holes.map((hole, index) => (
-          <Card key={hole.hole} mb="sm" id={`hole-card-${hole.hole}`}>
+          <Card key={hole.hole} mb="xs" p="sm" id={`hole-card-${hole.hole}`}>
             <Group justify="space-between" mb="xs">
               <Text fw={700}>Hoyo {hole.hole}</Text>
               {/* <Badge color="dusk" variant="light">
@@ -774,7 +781,7 @@ export default function RecordScorecardPage() {
                 {holeMeta[hole.hole]?.handicap ?? "--"}
               </Text>
             </Group>
-            <Group gap="xs" mb="sm">
+            <Group gap="xs" mb="xs">
               <Button
                 size="xs"
                 variant="light"
@@ -808,7 +815,7 @@ export default function RecordScorecardPage() {
                 Zopi
               </Button>
             </Group>
-            <Group gap="xs" mb="sm">
+            <Group gap="xs" mb="xs">
               <Button
                 size="xs"
                 variant="light"
@@ -871,7 +878,7 @@ export default function RecordScorecardPage() {
                 Sandy
               </Button>
             </Group>
-            <Group grow align="flex-start">
+            <Group grow align="flex-start" gap="xs">
               <div className="gml-stepper">
                 <Text size="sm" fw={600}>
                   Golpes
@@ -881,6 +888,7 @@ export default function RecordScorecardPage() {
                     variant="light"
                     onClick={() => updateNumber(index, "strokes", -1)}
                     disabled={locked || roundClosed}
+                    className="gml-score-btn"
                   >
                     -
                   </Button>
@@ -893,6 +901,7 @@ export default function RecordScorecardPage() {
                     variant="light"
                     onClick={() => updateNumber(index, "strokes", 1)}
                     disabled={locked || roundClosed}
+                    className="gml-score-btn"
                   >
                     +
                   </Button>
@@ -907,6 +916,7 @@ export default function RecordScorecardPage() {
                     variant="light"
                     onClick={() => updateNumber(index, "putts", -1)}
                     disabled={locked || roundClosed}
+                    className="gml-score-btn"
                   >
                     -
                   </Button>
@@ -917,22 +927,43 @@ export default function RecordScorecardPage() {
                     variant="light"
                     onClick={() => updateNumber(index, "putts", 1)}
                     disabled={locked || roundClosed}
+                    className="gml-score-btn"
                   >
                     +
                   </Button>
                 </div>
               </div>
             </Group>
-            <MultiSelect
-              label="Castigos"
-              data={PENALTIES}
-              value={hole.penalties}
-              onChange={(value) => updateHole(index, { penalties: value })}
-              placeholder="Selecciona"
-              clearable
-              disabled={locked || roundClosed}
-              mt="sm"
-            />
+            <div style={{ marginTop: "0.75rem" }}>
+              <Text size="sm" fw={600} mb={6}>
+                Castigos
+              </Text>
+              <Group gap="xs">
+                {PENALTIES.map((penalty) => {
+                  const active = hole.penalties?.includes(penalty.value);
+                  return (
+                    <Button
+                      key={penalty.value}
+                      size="xs"
+                      variant={active ? "filled" : "light"}
+                      color={active ? "clay" : "dusk"}
+                      onClick={() =>
+                        updateHole(index, {
+                          penalties: togglePenaltyValue(
+                            hole.penalties,
+                            penalty.value
+                          ),
+                        })
+                      }
+                      disabled={locked || roundClosed}
+                      className="gml-score-btn"
+                    >
+                      {penalty.label}
+                    </Button>
+                  );
+                })}
+              </Group>
+            </div>
           </Card>
         ))}
 

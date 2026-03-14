@@ -21,6 +21,15 @@ const { sendMessage } = require("@/scripts/sendMessage");
 
 const pendingWinNotifications = new Map();
 const pendingPenaltyNotifications = new Map();
+const OH_YES_LOST_MESSAGES = [
+  "Uff... te quitaron el Oh yes del hoyo {hole}. {player} se te adelantó. 😏⛳️",
+  "Se acabó la magia: perdiste el Oh yes del hoyo {hole}. {player} llegó más cerca. 🥲⛳️",
+  "Dolor: ya no tienes el Oh yes del hoyo {hole}. {player} te lo robó. 😬⛳️",
+  "Notificación amarga: el Oh yes del hoyo {hole} cambió de dueño. {player} lo tomó. 🧾⛳️",
+  "Te madrugaron el Oh yes del hoyo {hole}. {player} se lo llevó. 👀⛳️",
+  "Ups... el Oh yes del hoyo {hole} ya no es tuyo. {player} ganó la carrera. 🏃‍♂️⛳️",
+  "Se fue el Oh yes del hoyo {hole}. {player} llegó más cerquita. 😅⛳️",
+];
 
 export async function GET(request, { params }) {
   await connectDb();
@@ -87,6 +96,10 @@ export async function POST(request, { params }) {
   );
   console.log(`${round.courseSnapshot.clubName} handicap: ${courseHandicap}`)
   const normalizedTeeHoles = normalizeHoleHandicaps(tee?.holes || [], round);
+  const parByHole = normalizedTeeHoles.reduce((acc, hole, idx) => {
+    acc[hole.hole ?? idx + 1] = hole.par;
+    return acc;
+  }, {});
   const holeHandicaps =
     normalizedTeeHoles.map((hole, idx) => ({
       hole: hole.hole ?? idx + 1,
@@ -126,6 +139,49 @@ export async function POST(request, { params }) {
     },
     { upsert: true, new: true }
   );
+
+  const ohYesHoles = holes
+    .filter(
+      (hole) => hole?.hole && hole.ohYes && parByHole[hole.hole] === 3
+    )
+    .map((hole) => hole.hole);
+
+  if (ohYesHoles.length > 0) {
+    await Promise.all(
+      ohYesHoles.map(async (holeNumber) => {
+        const existingOhYesCards = await Scorecard.find({
+          round: round._id,
+          player: { $ne: player._id },
+          "holes.hole": holeNumber,
+          "holes.ohYes": true,
+        }).populate("player", "-passwordHash");
+
+        if (existingOhYesCards.length === 0) {
+          return;
+        }
+
+        await Promise.all(
+          existingOhYesCards.map(async (card) => {
+            await Scorecard.updateOne(
+              { _id: card._id, "holes.hole": holeNumber },
+              { $set: { "holes.$.ohYes": false } }
+            );
+            const loser = card.player;
+            if (loser?.phone) {
+              const template =
+                OH_YES_LOST_MESSAGES[
+                  Math.floor(Math.random() * OH_YES_LOST_MESSAGES.length)
+                ];
+              const message = template
+                .replace("{hole}", holeNumber)
+                .replace("{player}", player?.name || "Alguien");
+              await sendMessage(loser.phone, message);
+            }
+          })
+        );
+      })
+    );
+  }
 
   const getWinningEvents = (hole) => {
     const events = [];
@@ -232,12 +288,14 @@ export async function POST(request, { params }) {
             .replace("{player}", latestPlayer?.name || "Jugador")
             .replace("{item}", itemLabels[event.event] || event.event)
             .replace("{hole}", event.hole);
-          await Promise.allSettled(
-            participants.map((participant) =>
-              sendMessage(participant.phone, message)
-            )
-          );
-          sendMessage('120363405357623444@g.us', message)
+          // await Promise.allSettled(
+          //   participants.map((participant) =>
+          //     sendMessage(participant.phone, message)
+          //   )
+          // );
+          // Grupo Muerte Lenta
+          sendMessage('120363405357623444@g.us', message);
+          // sendMessage('120363424386158848@g.us', message);
         } finally {
           pendingWinNotifications.delete(key);
         }
@@ -299,6 +357,7 @@ export async function POST(request, { params }) {
       paloma: "Paloma",
       nerdina: "Nerdiña",
       whiskeys: "Whiskeys",
+      berrinche: "Berrinche",
     };
     newPenalties.forEach((event) => {
       const key = `${round._id}:${player._id}:${event.hole}:${event.penalty}`;
@@ -340,12 +399,15 @@ export async function POST(request, { params }) {
             .replace("{player}", latestPlayer?.name || "Jugador")
             .replace("{penalty}", penaltyLabels[event.penalty] || event.penalty)
             .replace("{hole}", event.hole);
-          await Promise.allSettled(
-            participants.map((participant) =>
-              sendMessage(participant.phone, message)
-            )
-          );
+          // await Promise.allSettled(
+          //   participants.map((participant) =>
+          //     sendMessage(participant.phone, message)
+          //   )
+          // );
+          // Grupo Muerte Lenta
           sendMessage('120363405357623444@g.us', message);
+          // sendMessage('120363424386158848@g.us', message);
+          
         } finally {
           pendingPenaltyNotifications.delete(key);
         }

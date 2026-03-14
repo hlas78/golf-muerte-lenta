@@ -97,6 +97,7 @@ export async function POST(request, { params }) {
       creatorName: creator?.name || "sin nombre",
       description: round.description || "",
       recordLink,
+      startedAt: round.startedAt,
     });
     const playerTee =
       round.playerTees?.find(

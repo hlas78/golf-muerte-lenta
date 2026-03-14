@@ -128,6 +128,7 @@ export async function POST(request, { params }) {
     creatorName: creator?.name || "sin nombre",
     description: round.description || "",
     recordLink,
+    startedAt: round.startedAt,
   });
   await sendMessage(user.phone, message);
 

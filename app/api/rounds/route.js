@@ -57,6 +57,14 @@ export async function POST(request) {
   const course = await Course.findOne({ courseId: payload.courseId });
   const config = await getConfigSnapshot();
 
+  const startedAtValue = payload.startedAt
+    ? new Date(payload.startedAt)
+    : null;
+  const startedAt =
+    startedAtValue && !Number.isNaN(startedAtValue.getTime())
+      ? startedAtValue
+      : new Date();
+
   const holesCount = Number(payload.holes) || 18;
   const nineType =
     holesCount === 9 ? payload.nineType || "front" : "front";
@@ -72,11 +80,13 @@ export async function POST(request) {
     players: payload.players || [],
     description: payload.description || "",
     configSnapshot: config.bets,
+    startedAt,
   });
-  console.log(round)
+  console.log('round: ', round)
   const playerIds = Array.isArray(payload.players)
     ? Array.from(new Set(payload.players.map(String)))
     : [];
+  console.log('players:', playerIds)
   if (playerIds.length > 0) {
     const tees = course?.tees || {};
     const allTees = [...(tees.male || []), ...(tees.female || [])];
@@ -102,6 +112,7 @@ export async function POST(request) {
     }));
     round.status = "active";
     await round.save();
+    console.log('Ronda guardada')
 
     await Scorecard.insertMany(
       participants.map((player) => ({
@@ -129,6 +140,7 @@ export async function POST(request) {
         })),
       }))
     );
+    console.log('Tarjetas creadas')
     const campo =
       round.courseSnapshot?.clubName ||
       round.courseSnapshot?.courseName ||
@@ -146,7 +158,9 @@ export async function POST(request) {
           creatorName: user?.name || "sin nombre",
           description: round.description || "",
           recordLink,
+          startedAt: round.startedAt,
         });
+        console.log(`mensaje de bienvenida creado para ${player.name}`)
         return sendMessage(player.phone, message);
       })
     );

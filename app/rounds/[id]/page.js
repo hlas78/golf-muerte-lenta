@@ -27,6 +27,7 @@ const PENALTY_LABELS = {
   paloma: "Paloma",
   nerdina: "Nerdiña",
   whiskeys: "Whiskeys",
+  berrinche: "Berrinche",
 };
 
 const ITEM_LABELS = {
@@ -41,6 +42,23 @@ const ITEM_LABELS = {
   holeOut: "Hole out",
   wetPar: "Wet par",
   ohYes: "Oh yes",
+};
+
+const formatRoundDate = (value) => {
+  if (!value) {
+    return "Sin fecha";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Sin fecha";
+  }
+  return date.toLocaleString("es-MX", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 export default function RoundDetailPage() {
@@ -217,6 +235,10 @@ export default function RoundDetailPage() {
   const canApprove = canManage;
   const isClosed = round?.status === "closed";
   const isAdmin = me?.role === "admin";
+  const roundStartAt = round?.startedAt || round?.createdAt;
+  const roundStartLabel = loading
+    ? "Cargando..."
+    : `Inicio: ${formatRoundDate(roundStartAt)}`;
 
   const teeOptions = useMemo(() => {
     const tees = round?.courseSnapshot?.tees;
@@ -805,6 +827,39 @@ export default function RoundDetailPage() {
     }
   };
 
+  const handleReopen = async () => {
+    if (!params?.id) {
+      return;
+    }
+    setClosing(true);
+    try {
+      const res = await fetch(`/api/rounds/${params.id}/reopen`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo reabrir la jugada.");
+      }
+      notifications.show({
+        title: "Jugada reabierta",
+        message: "Las tarjetas quedaron desbloqueadas.",
+        color: "club",
+      });
+      const updated = await fetch(`/api/rounds/${params.id}`).then((r) =>
+        r.json()
+      );
+      setRound(updated);
+    } catch (error) {
+      notifications.show({
+        title: "Error al reabrir",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setClosing(false);
+    }
+  };
+
 
   const minimizeTransfers = (payments) => {
     const summaryMap = {};
@@ -857,6 +912,8 @@ export default function RoundDetailPage() {
     }
     return true;
   };
+  const allCardsComplete =
+    scorecards.length > 0 && scorecards.every((card) => isCardComplete(card));
 
   const handleDeleteRound = async () => {
     if (!round?._id) {
@@ -886,7 +943,7 @@ export default function RoundDetailPage() {
 
   return (
     <main>
-      <AppShell title="Jugada activa" subtitle={loading ? "Cargando..." : ""}>
+      <AppShell title="Jugada activa" subtitle={roundStartLabel}>
       <Modal
         opened={deleteOpen}
         onClose={() => setDeleteOpen(false)}
@@ -1021,111 +1078,147 @@ export default function RoundDetailPage() {
           <Group justify="space-between">
             <div>
               <Text fw={700}>{courseName}</Text>
+              <Text size="sm" c="dusk.6">
+                Inicio: {formatRoundDate(roundStartAt)}
+              </Text>
             </div>
-            <Group>
-              {!isJoined && !isClosed ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  onClick={handleJoin}
-                  loading={joining}
-                >
-                  Unirme
-                </Button>
-              ) : null}
-              {isJoined && !isClosed ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  component="a"
-                  href={`/rounds/${params?.id}/record`}
-                >
-                  Editar tarjeta
-                </Button>
-              ) : null}
-              {canManage && !isClosed ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  onClick={() => setTeesModalOpen(true)}
-                >
-                  Editar tees
-                </Button>
-              ) : null}
-              {canApprove && !isClosed ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  color="clay"
-                  onClick={() => setRemovePlayerOpen(true)}
-                >
-                  Eliminar jugador
-                </Button>
-              ) : null}
-              {canApprove && !isClosed ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  onClick={() => setAddPlayerOpen(true)}
-                >
-                  Agregar jugador
-                </Button>
-              ) : null}
-              {canApprove && !isClosed ? (
-                <Button
-                  size="xs"
-                  color="club"
-                  onClick={handleSettle}
-                  loading={settling}
-                >
-                  Calcular pagos
-                </Button>
-              ) : null}
-              {canApprove && !isClosed ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  component={Link}
-                  href={`/rounds/${params?.id}/record-multi`}
-                >
-                  Captura por hoyo
-                </Button>
-              ) : null}
-              {canApprove && !isClosed ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  onClick={handleClose}
-                  loading={closing}
-                  disabled={!allAccepted}
-                >
-                  Cerrar jugada
-                </Button>
-              ) : null}
-              {isAdmin ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  onClick={handleExportRound}
-                  loading={exportingRound}
-                >
-                  Exportar
-                </Button>
-              ) : null}
-              {isAdmin ? (
-                <Button
-                  size="xs"
-                  variant="light"
-                  color="clay"
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  Eliminar
-                </Button>
-              ) : null}
-              {/* <Badge color={isClosed ? "dusk" : "club"}>
-                {isClosed ? "Cerrada" : "En juego"}
-              </Badge> */}
-            </Group>
+            {isClosed ? (
+              <Group>
+                {isAdmin ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={handleReopen}
+                    loading={closing}
+                  >
+                    Reabrir jugada
+                  </Button>
+                ) : null}
+                {isAdmin ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={handleExportRound}
+                    loading={exportingRound}
+                  >
+                    Exportar
+                  </Button>
+                ) : null}
+                {isAdmin ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="clay"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    Eliminar
+                  </Button>
+                ) : null}
+              </Group>
+            ) : (
+              <Group>
+                {!isJoined ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={handleJoin}
+                    loading={joining}
+                  >
+                    Unirme
+                  </Button>
+                ) : null}
+                {isJoined ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    component="a"
+                    href={`/rounds/${params?.id}/record`}
+                  >
+                    Editar mi tarjeta
+                  </Button>
+                ) : null}
+                {canManage ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={() => setTeesModalOpen(true)}
+                  >
+                    Editar tees
+                  </Button>
+                ) : null}
+                {canApprove ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="clay"
+                    onClick={() => setRemovePlayerOpen(true)}
+                  >
+                    Eliminar jugador
+                  </Button>
+                ) : null}
+                {canApprove ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={() => setAddPlayerOpen(true)}
+                  >
+                    Agregar jugador
+                  </Button>
+                ) : null}
+                {canApprove ? (
+                  <Button
+                    size="xs"
+                    color="club"
+                    onClick={handleSettle}
+                    loading={settling}
+                    disabled={!allCardsComplete}
+                  >
+                    Calcular pagos
+                  </Button>
+                ) : null}
+                {canApprove ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    component={Link}
+                    href={`/rounds/${params?.id}/record-multi`}
+                  >
+                    Captura por hoyo
+                  </Button>
+                ) : null}
+                {canApprove ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={handleClose}
+                    loading={closing}
+                    disabled={!allAccepted}
+                  >
+                    Cerrar jugada
+                  </Button>
+                ) : null}
+                {isAdmin ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={handleExportRound}
+                    loading={exportingRound}
+                  >
+                    Exportar
+                  </Button>
+                ) : null}
+                {isAdmin ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="clay"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    Eliminar
+                  </Button>
+                ) : null}
+              </Group>
+            )}
           </Group>
         </Card>
 
