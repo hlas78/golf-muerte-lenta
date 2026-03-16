@@ -95,15 +95,27 @@ export async function POST(request) {
       allTees[0]?.tee_name ||
       round.teeName ||
       "";
+    const requestedTees = Array.isArray(payload.playerTees)
+      ? payload.playerTees.reduce((acc, entry) => {
+          if (!entry?.player || !entry?.teeName) {
+            return acc;
+          }
+          acc[String(entry.player)] = entry.teeName;
+          return acc;
+        }, {})
+      : {};
     const participants = await User.find({ _id: { $in: playerIds } });
     const teeByPlayer = new Map();
     participants.forEach((player) => {
+      const requested = requestedTees[String(player._id)];
+      const requestedValid =
+        requested && allTees.find((option) => option.tee_name === requested);
       const preferred = String(player.defaultTeeName || "").toUpperCase();
       const valid =
         preferred && allTees.find((option) => option.tee_name === preferred);
       teeByPlayer.set(
         String(player._id),
-        valid?.tee_name || defaultTeeName
+        requestedValid?.tee_name || valid?.tee_name || defaultTeeName
       );
     });
     round.playerTees = playerIds.map((playerId) => ({

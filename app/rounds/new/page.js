@@ -6,14 +6,16 @@ import {
   Button,
   Card,
   Group,
-  MultiSelect,
+  Modal,
   Select,
+  Table,
   Text,
   Textarea,
   TextInput,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../components/AppShell";
+import { getCourseHandicapForRound } from "@/lib/scoring";
 
 const pad2 = (value) => String(value).padStart(2, "0");
 
@@ -41,10 +43,13 @@ export default function NewRoundPage() {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedPlayers, setSelectedPlayers] = useState([]);
+  const [playerTees, setPlayerTees] = useState({});
   const [description, setDescription] = useState("");
   const [startedAt, setStartedAt] = useState(() =>
     toLocalDateTimeValue(new Date())
   );
+  const [playersModalOpen, setPlayersModalOpen] = useState(false);
+  const [editingTeeByPlayer, setEditingTeeByPlayer] = useState({});
 
   useEffect(() => {
     fetch("/api/me")
@@ -88,7 +93,60 @@ export default function NewRoundPage() {
   const playerOptions = users.map((user) => ({
     value: user._id,
     label: `${user.name} · HC ${user.handicap ?? 0}`,
+    name: user.name,
+    handicap: user.handicap ?? 0,
   }));
+
+  const selectedCourse = courses.find(
+    (course) => String(course.courseId) === String(selectedCourseId)
+  );
+  const courseTees = selectedCourse?.tees || {};
+  const allTees = [
+    ...(courseTees.male || []),
+    ...(courseTees.female || []),
+  ];
+  const teeOptions = allTees.map((tee) => ({
+    value: tee.tee_name,
+    label: tee.tee_name,
+  }));
+  const defaultTeeName =
+    allTees.find((option) => option.tee_name === "BLANCAS")?.tee_name ||
+    allTees[0]?.tee_name ||
+    "";
+
+  const togglePlayer = (playerId) => {
+    setSelectedPlayers((prev) => {
+      const exists = prev.includes(playerId);
+      const next = exists
+        ? prev.filter((id) => id !== playerId)
+        : [...prev, playerId];
+      setPlayerTees((prevTees) => {
+        const nextTees = { ...prevTees };
+        if (!exists) {
+          if (!nextTees[playerId] && defaultTeeName) {
+            nextTees[playerId] = defaultTeeName;
+          }
+        } else {
+          delete nextTees[playerId];
+        }
+        return nextTees;
+      });
+      return next;
+    });
+  };
+
+  const updatePlayerTee = (playerId, teeName) => {
+    setPlayerTees((prev) => ({ ...prev, [playerId]: teeName }));
+  };
+
+  const setEditingTee = (playerId, isEditing) => {
+    setEditingTeeByPlayer((prev) => ({ ...prev, [playerId]: isEditing }));
+  };
+
+  const roundMeta = {
+    holes: Number(holes) || 18,
+    nineType: holes === "9" ? nineType : "front",
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -128,6 +186,10 @@ export default function NewRoundPage() {
           createdBy: me.user?._id,
           supervisor: me.user?._id,
           players: selectedPlayers,
+          playerTees: selectedPlayers.map((playerId) => ({
+            player: playerId,
+            teeName: playerTees[playerId],
+          })),
           description: description.trim(),
           startedAt: startedAtValue,
         }),
@@ -151,6 +213,90 @@ export default function NewRoundPage() {
   return (
     <main>
       <AppShell title="Nueva jugada" subtitle="Selecciona campo y modalidad.">
+        <Modal
+          opened={playersModalOpen}
+          onClose={() => setPlayersModalOpen(false)}
+          title="Selecciona jugadores"
+          centered
+        >
+          {!selectedCourseId ? (
+            <Text size="sm" c="dusk.6" mb="sm">
+              Selecciona un campo para habilitar los tees de salida.
+            </Text>
+          ) : null}
+          <div className="gml-players-compact">
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Jugador</Table.Th>
+                <Table.Th>HC</Table.Th>
+                <Table.Th>Tee</Table.Th>
+                <Table.Th>HC Tee</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {playerOptions.map((player) => {
+                const selected = selectedPlayers.includes(player.value);
+                const teeName = playerTees[player.value] || defaultTeeName;
+                const tee = allTees.find((option) => option.tee_name === teeName);
+                const courseHandicap = getCourseHandicapForRound(
+                  tee,
+                  roundMeta,
+                  player.handicap
+                );
+                const isEditing = Boolean(editingTeeByPlayer[player.value]);
+                return (
+                  <Table.Tr key={player.value}>
+                    <Table.Td>{player.name}</Table.Td>
+                    <Table.Td>{player.handicap}</Table.Td>
+                    <Table.Td>
+                      {isEditing && selectedCourseId ? (
+                        <Select
+                          data={teeOptions}
+                          value={teeName}
+                          onChange={(value) => {
+                            updatePlayerTee(player.value, value || "");
+                            setEditingTee(player.value, false);
+                          }}
+                          placeholder="Sin tee"
+                          size="xs"
+                        />
+                      ) : (
+                        <Button
+                          variant="subtle"
+                          size="xs"
+                          className="gml-link-text"
+                          onClick={() => setEditingTee(player.value, true)}
+                          disabled={!selectedCourseId}
+                        >
+                          {teeName || "Sin tee"}
+                        </Button>
+                      )}
+                    </Table.Td>
+                    <Table.Td>{courseHandicap}</Table.Td>
+                    <Table.Td>
+                      <Button
+                        size="xs"
+                        variant={selected ? "filled" : "light"}
+                        color={selected ? "club" : "dusk"}
+                        onClick={() => togglePlayer(player.value)}
+                      >
+                        {selected ? "Quitar" : "Agregar"}
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+          </div>
+          <Group justify="flex-end" mt="md">
+            <Button variant="light" onClick={() => setPlayersModalOpen(false)}>
+              Listo
+            </Button>
+          </Group>
+        </Modal>
         <Card>
           <form className="gml-form" onSubmit={handleSubmit}>
             <Select
@@ -183,15 +329,31 @@ export default function NewRoundPage() {
                 onChange={setNineType}
               />
             ) : null}
-            <MultiSelect
-              label="Jugadores"
-              placeholder="Selecciona jugadores"
-              data={playerOptions}
-              value={selectedPlayers}
-              onChange={setSelectedPlayers}
-              searchable
-              clearable
-            />
+            <div>
+              <Text size="sm" fw={600} mb={6}>
+                Jugadores
+              </Text>
+              <Button
+                variant="light"
+                onClick={() => setPlayersModalOpen(true)}
+              >
+                {selectedPlayers.length > 0
+                  ? `Editar jugadores (${selectedPlayers.length})`
+                  : "Seleccionar jugadores"}
+              </Button>
+              {selectedPlayers.length > 0 ? (
+                <Text size="xs" c="dusk.6" mt={4}>
+                  {selectedPlayers
+                    .map(
+                      (id) =>
+                        playerOptions.find((option) => option.value === id)
+                          ?.label
+                    )
+                    .filter(Boolean)
+                    .join(", ")}
+                </Text>
+              ) : null}
+            </div>
             <TextInput
               label="Inicio de la jugada"
               type="datetime-local"
