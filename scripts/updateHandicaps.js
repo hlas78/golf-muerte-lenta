@@ -118,8 +118,16 @@ async function extractHandicap(page, { userId }) {
   } else {
     value = Number.parseFloat(String(data?.index_ghap || "").split('~')[0].replace(/[^\d.-]/g, ""));
   }
+  const valor = String(data?.index || "")
+  if (valor.startsWith('~')) {
+    value = Number.parseFloat(String(data?.index || "").split('~')[1].replace(/[^\d.-]/g, ""));
+  } else if (String(data?.index || "").includes('~')) {
+    value = Number.parseFloat(String(data?.index || "").split('~')[0].replace(/[^\d.-]/g, "")) + 1
+  } else {
+    value = Number.parseFloat(String(data?.index || "").split('~')[0].replace(/[^\d.-]/g, ""));
+  }
   if (Number.isNaN(value)) {
-    throw new Error("No se pudo leer handicap desde API");
+    throw new Error(`No se pudo leer handicap desde API: ${valor} ${JSON.stringify(data)}`);
   }
   return value;
 }
@@ -169,7 +177,7 @@ async function run() {
           { _id: user._id },
           { handicap, grintLastSync: new Date() }
         );
-        console.log(`Actualizado ${user.name}: ${handicap}`);
+        console.log(`Actualizado ${user.name}: ${handicap}\n`);
         const delayMs = Math.floor(1000 + Math.random() * 2000);
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       } catch (error) {

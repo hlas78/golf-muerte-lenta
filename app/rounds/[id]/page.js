@@ -1444,7 +1444,7 @@ export default function RoundDetailPage() {
             </Text>
           ) : (
             penaltyFeed.map((item) => (
-              <Group key={`${item.player}-${item.hole}`} mb="sm">
+              <Group key={`${item.player}-${item.hole}-${item.penalty}`} mb="sm">
                 <Badge color="dusk" variant="light">
                   Hoyo {item.hole}
                 </Badge>
