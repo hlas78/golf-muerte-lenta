@@ -16,6 +16,11 @@ import {
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../../components/AppShell";
 import { getSocket } from "@/lib/socketClient";
+import {
+  allocateStrokes,
+  getCourseHandicapForRound,
+  normalizeHoleHandicaps,
+} from "@/lib/scoring";
 
 const PENALTIES = [
   { value: "pinkies", label: "Pinkies" },
@@ -41,6 +46,7 @@ export default function RecordScorecardPage() {
   const [role, setRole] = useState("");
   const [activePlayerId, setActivePlayerId] = useState(null);
   const [holes, setHoles] = useState([]);
+  const [scorecards, setScorecards] = useState([]);
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -191,6 +197,7 @@ export default function RecordScorecardPage() {
     fetch(`/api/rounds/${params.id}/scorecards`)
       .then((res) => res.json())
       .then((data) => {
+        setScorecards(Array.isArray(data.scorecards) ? data.scorecards : []);
         const existing = Array.isArray(data.scorecards)
           ? data.scorecards.find(
               (card) => String(card.player?._id) === String(targetId)
@@ -311,6 +318,133 @@ export default function RecordScorecardPage() {
       ) || null
     );
   }, [round, activePlayerId]);
+
+  const allTees = useMemo(() => {
+    const tees = round?.courseSnapshot?.tees;
+    return tees ? [...(tees.male || []), ...(tees.female || [])] : [];
+  }, [round]);
+
+  const playerCourseHandicaps = useMemo(() => {
+    if (!round?.players?.length || !allTees.length) {
+      return {};
+    }
+    return round.players.reduce((acc, player) => {
+      const teeName =
+        round.playerTees?.find(
+          (entry) => String(entry.player) === String(player._id)
+        )?.teeName || round.teeName;
+      const tee =
+        allTees.find((option) => option.tee_name === teeName) || allTees[0];
+      acc[String(player._id)] = getCourseHandicapForRound(
+        tee,
+        round,
+        player.handicap
+      );
+      return acc;
+    }, {});
+  }, [round, allTees]);
+
+  const minCourseHandicap = useMemo(() => {
+    const values = Object.values(playerCourseHandicaps).filter((value) =>
+      Number.isFinite(value)
+    );
+    if (!values.length) {
+      return 0;
+    }
+    return values.reduce((min, value) => (value < min ? value : min), values[0]);
+  }, [playerCourseHandicaps]);
+
+  const strokesMapByPlayer = useMemo(() => {
+    if (!round?.players?.length || !allTees.length) {
+      return {};
+    }
+    return round.players.reduce((acc, player) => {
+      const teeName =
+        round.playerTees?.find(
+          (entry) => String(entry.player) === String(player._id)
+        )?.teeName || round.teeName;
+      const tee =
+        allTees.find((option) => option.tee_name === teeName) || allTees[0];
+      const normalized = normalizeHoleHandicaps(tee?.holes || [], round);
+      const holeHandicaps = normalized.map((hole, idx) => ({
+        hole: hole.hole ?? idx + 1,
+        handicap: hole.handicap,
+      }));
+      const courseHandicap =
+        playerCourseHandicaps[String(player._id)] ?? player.handicap ?? 0;
+      const relativeHandicap = Math.max(
+        0,
+        courseHandicap -
+          (Number.isFinite(minCourseHandicap) ? minCourseHandicap : 0)
+      );
+      acc[String(player._id)] = allocateStrokes(
+        relativeHandicap,
+        holeHandicaps,
+        round.holes
+      );
+      return acc;
+    }, {});
+  }, [round, allTees, playerCourseHandicaps, minCourseHandicap]);
+
+  const liveScorecards = useMemo(() => {
+    if (!round?.players?.length) {
+      return [];
+    }
+    const base = Array.isArray(scorecards) ? scorecards : [];
+    const withActive = base.map((card) => {
+      if (String(card.player?._id) === String(activePlayerId)) {
+        return { ...card, holes };
+      }
+      return card;
+    });
+    if (
+      activePlayerId &&
+      !withActive.some(
+        (card) => String(card.player?._id) === String(activePlayerId)
+      )
+    ) {
+      const player = round.players.find(
+        (entry) => String(entry._id) === String(activePlayerId)
+      );
+      if (player) {
+        withActive.push({
+          player,
+          holes,
+        });
+      }
+    }
+    return withActive;
+  }, [scorecards, activePlayerId, holes, round]);
+
+  const holeWinners = useMemo(() => {
+    if (!round?.holes || !liveScorecards.length) {
+      return {};
+    }
+    const winners = {};
+    for (let i = 1; i <= round.holes; i += 1) {
+      const netScores = liveScorecards
+        .map((card) => {
+          const strokes = card.holes?.find((entry) => entry.hole === i)?.strokes;
+          if (strokes == null || strokes === "") {
+            return null;
+          }
+          const playerId = String(card.player?._id || "");
+          const strokesMap = strokesMapByPlayer[playerId] || {};
+          const net = Number(strokes) - (strokesMap[i] || 0);
+          return { playerId, net };
+        })
+        .filter(Boolean);
+      if (!netScores.length) {
+        continue;
+      }
+      const min = Math.min(...netScores.map((entry) => entry.net));
+      const tied = netScores.filter((entry) => entry.net === min);
+      if (tied.length === 1) {
+        winners[i] = tied[0].playerId;
+      }
+    }
+    return winners;
+  }, [liveScorecards, strokesMapByPlayer, round]);
 
   const updateHole = (index, patch) => {
     if (locked) {
@@ -768,10 +902,31 @@ export default function RecordScorecardPage() {
           </Group>
         </Card>
 
-        {holes.map((hole, index) => (
+        {holes.map((hole, index) => {
+          const hasStrokes = hole.strokes != null && hole.strokes !== "";
+          const activeId = String(activePlayerId || "");
+          const advantageCount = hasStrokes
+            ? strokesMapByPlayer[activeId]?.[hole.hole] || 0
+            : 0;
+          const isWinner =
+            hasStrokes && holeWinners[hole.hole] === activeId;
+          return (
           <Card key={hole.hole} mb="xs" p="sm" id={`hole-card-${hole.hole}`}>
             <Group justify="space-between" mb="xs">
-              <Text fw={700}>Hoyo {hole.hole}</Text>
+              <div
+                className={
+                  advantageCount > 0 ? "gml-advantage-cell" : undefined
+                }
+              >
+                <Text fw={700} className={isWinner ? "gml-win-cell" : undefined}>
+                  Hoyo {hole.hole}
+                </Text>
+                {advantageCount > 0 ? (
+                  <span className="gml-advantage">
+                    {"•".repeat(advantageCount)}
+                  </span>
+                ) : null}
+              </div>
               {/* <Badge color="dusk" variant="light">
                 Captura
               </Badge> */}
@@ -965,7 +1120,8 @@ export default function RecordScorecardPage() {
               </Group>
             </div>
           </Card>
-        ))}
+        );
+        })}
 
         <Group justify="flex-end" mt="lg">
           <Button

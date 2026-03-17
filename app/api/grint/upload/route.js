@@ -39,6 +39,7 @@ function mapTeeName(teeName) {
     rojas: "Red",
     negras: "Black",
     plateadas: "Silver",
+    blancasm: "WhiteW"
   };
   return mapping[normalized] || teeName;
 }

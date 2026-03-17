@@ -3,7 +3,7 @@ import "@mantine/notifications/styles.css";
 import "./globals.css";
 import { MantineProvider, ColorSchemeScript } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
-import { Bebas_Neue, Sora } from "next/font/google";
+import { Bebas_Neue, Sora, Roboto_Condensed } from "next/font/google";
 import { theme } from "./theme";
 
 const titleFont = Bebas_Neue({
@@ -12,7 +12,7 @@ const titleFont = Bebas_Neue({
   variable: "--font-title",
 });
 
-const bodyFont = Sora({
+const bodyFont = Roboto_Condensed({
   weight: ["400", "600", "700"],
   subsets: ["latin"],
   variable: "--font-body",

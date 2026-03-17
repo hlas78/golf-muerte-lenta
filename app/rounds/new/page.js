@@ -95,6 +95,7 @@ export default function NewRoundPage() {
     label: `${user.name} · HC ${user.handicap ?? 0}`,
     name: user.name,
     handicap: user.handicap ?? 0,
+    defaultTeeName: user.defaultTeeName || "",
   }));
 
   const selectedCourse = courses.find(
@@ -123,8 +124,16 @@ export default function NewRoundPage() {
       setPlayerTees((prevTees) => {
         const nextTees = { ...prevTees };
         if (!exists) {
-          if (!nextTees[playerId] && defaultTeeName) {
-            nextTees[playerId] = defaultTeeName;
+          if (!nextTees[playerId]) {
+            const player = playerOptions.find(
+              (option) => option.value === playerId
+            );
+            const preferred = String(player?.defaultTeeName || "").toUpperCase();
+            const preferredValid =
+              preferred &&
+              allTees.find((option) => option.tee_name === preferred);
+            nextTees[playerId] =
+              preferredValid?.tee_name || defaultTeeName;
           }
         } else {
           delete nextTees[playerId];
@@ -238,7 +247,14 @@ export default function NewRoundPage() {
             <Table.Tbody>
               {playerOptions.map((player) => {
                 const selected = selectedPlayers.includes(player.value);
-                const teeName = playerTees[player.value] || defaultTeeName;
+                const preferred = String(player.defaultTeeName || "").toUpperCase();
+                const preferredValid =
+                  preferred &&
+                  allTees.find((option) => option.tee_name === preferred);
+                const teeName =
+                  playerTees[player.value] ||
+                  preferredValid?.tee_name ||
+                  defaultTeeName;
                 const tee = allTees.find((option) => option.tee_name === teeName);
                 const courseHandicap = getCourseHandicapForRound(
                   tee,

@@ -15,6 +15,7 @@ const TEE_NAME_MAP = {
   GOLD: "DORADAS",
   SILVER: "PLATEADAS",
   RED: "ROJAS",
+  WWHITE: "BLANCASM"
 };
 
 const RATING_NAME_MAP = {
@@ -24,6 +25,7 @@ const RATING_NAME_MAP = {
   DORADAS: "GOLD",
   PLATEADAS: "SILVER",
   ROJAS: "RED",
+  BLANCASM: "WWHITE"
 };
 
 const toNumber = (value) => {

@@ -225,6 +225,7 @@ export default function UsersPage() {
                 { value: "NEGRAS", label: "NEGRAS" },
                 { value: "PLATEADAS", label: "PLATEADAS" },
                 { value: "ROJAS", label: "ROJAS" },
+                { value: "BLANCASM", label: "BLANCASM" },
               ]}
             />
             <Select

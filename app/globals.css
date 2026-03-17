@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600&display=swap");
+
 * {
   box-sizing: border-box;
 }
@@ -226,30 +228,36 @@ tbody .gml-sticky-col {
 
 .gml-players-compact .mantine-Table-root th,
 .gml-players-compact .mantine-Table-root td {
-  padding: 0.1rem 0.3rem;
-  font-size: 0.7rem;
+  padding: 0.1rem 0.25rem !important;
+  font-size: 0.68rem !important;
   line-height: 1.1;
-  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif;
+  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif !important;
+}
+
+.gml-players-compact .mantine-Table-root * {
+  font-size: 0.68rem !important;
+  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif !important;
+  line-height: 1.1 !important;
 }
 
 .gml-players-compact .mantine-Button-root {
-  padding: 0.05rem 0.35rem;
-  min-height: 22px;
-  font-size: 0.68rem;
-  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif;
+  padding: 0.05rem 0.25rem !important;
+  min-height: 20px !important;
+  font-size: 0.65rem !important;
+  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif !important;
 }
 
 .gml-players-compact .mantine-Select-input {
-  min-height: 24px;
+  min-height: 22px !important;
   padding-top: 0;
   padding-bottom: 0;
-  font-size: 0.7rem;
-  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif;
+  font-size: 0.68rem !important;
+  font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif !important;
 }
 
 .gml-link-text {
-  padding: 0;
-  text-decoration: underline;
+  padding: 0 !important;
+  text-decoration: underline !important;
 }
 
 @media (max-width: 600px) {

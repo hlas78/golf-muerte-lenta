@@ -7,13 +7,15 @@ import {
   Button,
   Card,
   Group,
-  MultiSelect,
+  Modal,
   Select,
+  Table,
   Text,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../../components/AppShell";
 import { getSocket } from "@/lib/socketClient";
+import { getCourseHandicapForRound } from "@/lib/scoring";
 
 const PENALTIES = [
   { value: "pinkies", label: "Pinkies" },
@@ -50,6 +52,7 @@ export default function RecordMultiPage() {
   const [scorecards, setScorecards] = useState([]);
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [selectedHole, setSelectedHole] = useState("1");
+  const [playersModalOpen, setPlayersModalOpen] = useState(false);
   const [me, setMe] = useState(null);
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
@@ -133,6 +136,8 @@ export default function RecordMultiPage() {
       players.map((player) => ({
         value: player._id,
         label: `${player.name} · HC ${player.handicap ?? 0}`,
+        name: player.name,
+        handicap: player.handicap ?? 0,
       })),
     [players]
   );
@@ -440,24 +445,76 @@ export default function RecordMultiPage() {
     getCardForPlayer(playerId)
   );
 
+  const togglePlayer = (playerId) => {
+    setSelectedPlayers((prev) =>
+      prev.includes(playerId)
+        ? prev.filter((id) => id !== playerId)
+        : [...prev, playerId]
+    );
+  };
+
   return (
     <main className="gml-scorecard-compact">
       <AppShell
         title="Captura por hoyo"
         // subtitle="Selecciona jugadores y registra un hoyo a la vez."
       >
-        <Card mb="sm" p="sm">
-          <MultiSelect
-            label="Jugadores"
-            placeholder="Selecciona participantes"
-            data={playerOptions}
-            value={selectedPlayers}
-            onChange={setSelectedPlayers}
-            searchable
-            clearable
-            disabled={isClosed}
-          />
-          <Group align="flex-end" mt="xs">
+        <Modal
+          opened={playersModalOpen}
+          onClose={() => setPlayersModalOpen(false)}
+          title="Selecciona jugadores"
+          centered
+        >
+          <div className="gml-players-compact">
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Jugador</Table.Th>
+                  <Table.Th>HC Tee</Table.Th>
+                  <Table.Th />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {playerOptions.map((player) => {
+                  const selected = selectedPlayers.includes(player.value);
+                  const tees = round?.courseSnapshot?.tees || {};
+                  const allTees = [...(tees.male || []), ...(tees.female || [])];
+                  const teeName =
+                    round?.playerTees?.find(
+                      (entry) => String(entry.player) === String(player.value)
+                    )?.teeName || round?.teeName;
+                  const tee =
+                    allTees.find((option) => option.tee_name === teeName) ||
+                    allTees[0];
+                  const courseHandicap = getCourseHandicapForRound(
+                    tee,
+                    round,
+                    player.handicap
+                  );
+                  return (
+                    <Table.Tr key={player.value}>
+                      <Table.Td>{player.name}</Table.Td>
+                      <Table.Td>
+                        {Number.isFinite(courseHandicap) ? courseHandicap : "-"}
+                      </Table.Td>
+                      <Table.Td>
+                        <Button
+                          size="xs"
+                          variant={selected ? "filled" : "light"}
+                          color={selected ? "club" : "dusk"}
+                          onClick={() => togglePlayer(player.value)}
+                          disabled={isClosed}
+                        >
+                          {selected ? "Quitar" : "Agregar"}
+                        </Button>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </div>
+          <Group justify="space-between" mt="md">
             <Button
               variant="light"
               onClick={() =>
@@ -474,6 +531,29 @@ export default function RecordMultiPage() {
             >
               Limpiar
             </Button>
+          </Group>
+          <Group justify="flex-end" mt="md">
+            <Button variant="light" onClick={() => setPlayersModalOpen(false)}>
+              Listo
+            </Button>
+          </Group>
+        </Modal>
+        <Card mb="sm" p="sm">
+          <div>
+            <Text size="sm" fw={600} mb={6}>
+              Jugadores
+            </Text>
+            <Button
+              variant="light"
+              onClick={() => setPlayersModalOpen(true)}
+              disabled={isClosed}
+            >
+              {selectedPlayers.length > 0
+                ? `Editar jugadores (${selectedPlayers.length})`
+                : "Seleccionar jugadores"}
+            </Button>
+          </div>
+          <Group align="flex-end" mt="xs">
             <Select
               label="Hoyo"
               placeholder="Selecciona hoyo"
