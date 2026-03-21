@@ -386,6 +386,40 @@ export default function RecordScorecardPage() {
     }, {});
   }, [round, allTees, playerCourseHandicaps, minCourseHandicap]);
 
+  const fallbackStrokesMap = useMemo(() => {
+    const activeId = String(activePlayerId || "");
+    if (!activeId || !round?.holes) {
+      return {};
+    }
+    if (strokesMapByPlayer[activeId]) {
+      return strokesMapByPlayer[activeId];
+    }
+    const handicaps = Object.values(holeMeta || {})
+      .map((hole, idx) => ({
+        hole: hole.hole ?? idx + 1,
+        handicap: hole.handicap,
+      }))
+      .filter((hole) => Number.isFinite(hole.handicap));
+    if (!handicaps.length) {
+      return {};
+    }
+    const courseHandicap =
+      playerCourseHandicaps[activeId] ?? activePlayer?.handicap ?? 0;
+    const relativeHandicap = Math.max(
+      0,
+      courseHandicap - (Number.isFinite(minCourseHandicap) ? minCourseHandicap : 0)
+    );
+    return allocateStrokes(relativeHandicap, handicaps, round.holes);
+  }, [
+    activePlayerId,
+    round,
+    strokesMapByPlayer,
+    holeMeta,
+    playerCourseHandicaps,
+    activePlayer,
+    minCourseHandicap,
+  ]);
+
   const liveScorecards = useMemo(() => {
     if (!round?.players?.length) {
       return [];
@@ -575,6 +609,18 @@ export default function RecordScorecardPage() {
     const current = Number(holes[index]?.[key] ?? 0);
     const next = Math.max(0, current + delta);
     updateHole(index, { [key]: next });
+  };
+
+  const loadScorecards = () => {
+    if (!params?.id) {
+      return;
+    }
+    fetch(`/api/rounds/${params.id}/scorecards`)
+      .then((res) => res.json())
+      .then((data) =>
+        setScorecards(Array.isArray(data.scorecards) ? data.scorecards : [])
+      )
+      .catch(() => setScorecards([]));
   };
 
   const handleSave = async () => {
@@ -776,6 +822,19 @@ export default function RecordScorecardPage() {
     return () => clearTimeout(saveTimeout.current);
   }, [holes, me, round]);
 
+  useEffect(() => {
+    if (!params?.id) {
+      return;
+    }
+    const socket = getSocket();
+    socket.emit("round:join", params.id);
+    socket.on("scorecard:update", loadScorecards);
+    loadScorecards();
+    return () => {
+      socket.off("scorecard:update", loadScorecards);
+    };
+  }, [params?.id]);
+
   return (
     <main className="gml-scorecard-compact">
       <AppShell
@@ -905,9 +964,10 @@ export default function RecordScorecardPage() {
         {holes.map((hole, index) => {
           const hasStrokes = hole.strokes != null && hole.strokes !== "";
           const activeId = String(activePlayerId || "");
-          const advantageCount = hasStrokes
-            ? strokesMapByPlayer[activeId]?.[hole.hole] || 0
-            : 0;
+          const advantageCount =
+            strokesMapByPlayer[activeId]?.[hole.hole] ??
+            fallbackStrokesMap[hole.hole] ??
+            0;
           const isWinner =
             hasStrokes && holeWinners[hole.hole] === activeId;
           return (

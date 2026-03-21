@@ -349,14 +349,15 @@ export default function NewRoundPage() {
               <Text size="sm" fw={600} mb={6}>
                 Jugadores
               </Text>
-              <Button
-                variant="light"
-                onClick={() => setPlayersModalOpen(true)}
-              >
-                {selectedPlayers.length > 0
-                  ? `Editar jugadores (${selectedPlayers.length})`
-                  : "Seleccionar jugadores"}
-              </Button>
+            <Button
+              variant="light"
+              onClick={() => setPlayersModalOpen(true)}
+              disabled={!selectedCourseId}
+            >
+              {selectedPlayers.length > 0
+                ? `Editar jugadores (${selectedPlayers.length})`
+                : "Seleccionar jugadores"}
+            </Button>
               {selectedPlayers.length > 0 ? (
                 <Text size="xs" c="dusk.6" mt={4}>
                   {selectedPlayers

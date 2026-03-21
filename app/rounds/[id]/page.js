@@ -310,20 +310,6 @@ export default function RoundDetailPage() {
     }, {});
   }, [summary]);
 
-  const winningTotals = useMemo(() => {
-    if (!Array.isArray(summary?.payments)) {
-      return {};
-    }
-    return summary.payments.reduce((acc, payment) => {
-      const playerId = String(payment.to);
-      if (!acc[playerId]) {
-        acc[playerId] = new Set();
-      }
-      acc[playerId].add(payment.item);
-      return acc;
-    }, {});
-  }, [summary]);
-
   const holeHandicapsByPlayer = useMemo(() => {
     const tees = round?.courseSnapshot?.tees;
     if (!tees || !scorecards.length) {
@@ -359,8 +345,7 @@ export default function RoundDetailPage() {
     return holeHandicapsByPlayer[playerId] || [];
   };
 
-  const showAdvantages =
-    Array.isArray(summary?.payments) && summary.payments.length > 0;
+  const showAdvantages = Boolean(round?.holes) && scorecards.length > 0;
   const minCourseHandicap = useMemo(() => {
     if (!scorecards.length) {
       return 0;
@@ -373,7 +358,7 @@ export default function RoundDetailPage() {
     }, Number.POSITIVE_INFINITY);
   }, [scorecards]);
   const advantageStrokesByPlayer = useMemo(() => {
-    if (!showAdvantages || !round?.holes) {
+    if (!round?.holes) {
       return {};
     }
     return scorecards.reduce((acc, card) => {
@@ -397,7 +382,44 @@ export default function RoundDetailPage() {
       );
       return acc;
     }, {});
-  }, [scorecards, round, minCourseHandicap, showAdvantages]);
+  }, [scorecards, round, minCourseHandicap]);
+
+  const liveWinningCells = useMemo(() => {
+    if (!scorecards.length || !round?.holes) {
+      return {};
+    }
+    const winners = {};
+    for (let hole = 1; hole <= round.holes; hole += 1) {
+      const netScores = scorecards
+        .map((card) => {
+          const playerId = card.player?._id?.toString();
+          if (!playerId) {
+            return null;
+          }
+          const entry = card.holes?.find((item) => item.hole === hole);
+          if (entry?.strokes == null || entry.strokes === "") {
+            return null;
+          }
+          const strokesMap = advantageStrokesByPlayer[playerId] || {};
+          const net = (entry.strokes || 0) - (strokesMap[hole] || 0);
+          return { playerId, net };
+        })
+        .filter(Boolean);
+      if (!netScores.length) {
+        continue;
+      }
+      const min = Math.min(...netScores.map((entry) => entry.net));
+      const tied = netScores.filter((entry) => entry.net === min);
+      if (tied.length === 1) {
+        const winnerId = tied[0].playerId;
+        if (!winners[winnerId]) {
+          winners[winnerId] = new Set();
+        }
+        winners[winnerId].add(hole);
+      }
+    }
+    return winners;
+  }, [scorecards, round, advantageStrokesByPlayer]);
 
   const courseHandicapByPlayer = useMemo(() => {
     if (!scorecards.length) {
@@ -438,6 +460,105 @@ export default function RoundDetailPage() {
       return acc;
     }, {});
   }, [round, scorecards]);
+
+  const winningTotals = useMemo(() => {
+    if (Array.isArray(summary?.payments)) {
+      return summary.payments.reduce((acc, payment) => {
+        const playerId = String(payment.to);
+        if (!acc[playerId]) {
+          acc[playerId] = new Set();
+        }
+        acc[playerId].add(payment.item);
+        return acc;
+      }, {});
+    }
+    if (!scorecards.length || !round?.holes) {
+      return {};
+    }
+    const totals = {};
+    const addWinner = (playerId, item) => {
+      if (!playerId) {
+        return;
+      }
+      if (!totals[playerId]) {
+        totals[playerId] = new Set();
+      }
+      totals[playerId].add(item);
+    };
+    const getNetTotalForRange = (card, holeList) => {
+      if (!Array.isArray(holeList) || holeList.length === 0) {
+        return null;
+      }
+      const playerId = card.player?._id?.toString();
+      if (!playerId) {
+        return null;
+      }
+      const handicaps = getHoleHandicapsForCard(card);
+      const fallbackHandicap =
+        (playerId ? courseHandicapByPlayer[playerId] : undefined) ??
+        card.player?.handicap ??
+        0;
+      const courseHandicap = Number.isFinite(card.courseHandicap)
+        ? card.courseHandicap
+        : fallbackHandicap;
+      const relativeHandicap = Math.max(
+        0,
+        courseHandicap -
+          (Number.isFinite(minCourseHandicap) ? minCourseHandicap : 0)
+      );
+      const strokesMap = buildStrokesMap(
+        relativeHandicap,
+        handicaps,
+        round.holes
+      );
+      const missing = holeList.some((hole) => {
+        const entry = card.holes?.find((item) => item.hole === hole);
+        return entry?.strokes == null || entry.strokes === "";
+      });
+      if (missing) {
+        return null;
+      }
+      return holeList.reduce((sum, hole) => {
+        const entry = card.holes?.find((item) => item.hole === hole);
+        const strokes = entry?.strokes || 0;
+        return sum + (strokes - (strokesMap[hole] || 0));
+      }, 0);
+    };
+    const evaluateWinner = (holeList, item) => {
+      const totalsByPlayer = scorecards
+        .map((card) => {
+          const total = getNetTotalForRange(card, holeList);
+          if (total == null) {
+            return null;
+          }
+          return { playerId: String(card.player?._id), total };
+        })
+        .filter(Boolean);
+      if (totalsByPlayer.length !== scorecards.length) {
+        return;
+      }
+      const minValue = Math.min(...totalsByPlayer.map((entry) => entry.total));
+      const tied = totalsByPlayer.filter((entry) => entry.total === minValue);
+      if (tied.length === 1) {
+        addWinner(tied[0].playerId, item);
+      }
+    };
+    evaluateWinner(frontHoles, "medalFront");
+    if (round.holes > 9) {
+      evaluateWinner(backHoles, "medalBack");
+      evaluateWinner(holes, "match");
+    }
+    return totals;
+  }, [
+    summary,
+    scorecards,
+    round,
+    frontHoles,
+    backHoles,
+    holes,
+    courseHandicapByPlayer,
+    minCourseHandicap,
+  ]);
 
   const getCourseHandicapForCard = (card) => {
     const playerId = card.player?._id?.toString();
@@ -1304,13 +1425,15 @@ export default function RoundDetailPage() {
                           const entry = card.holes?.find(
                             (item) => item.hole === hole
                           );
-                          const strokes = entry?.strokes ?? "-";
+                          const strokes = entry?.strokes ?? "";
                           const putts = entry?.putts;
                           const ohYes = entry?.ohYes;
                           const sandy = entry?.sandy;
                           const wet = entry?.water;
                           const isWinningCell = Boolean(
-                            playerId && winningCells[playerId]?.has(hole)
+                            playerId &&
+                              (winningCells[playerId]?.has(hole) ||
+                                liveWinningCells[playerId]?.has(hole))
                           );
                           const advantageCount = showAdvantages
                             ? strokesMap[hole] || 0
