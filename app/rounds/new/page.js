@@ -78,7 +78,7 @@ export default function NewRoundPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/users")
+    fetch("/api/users?status=active")
       .then((res) => res.json())
       .then((data) => setUsers(Array.isArray(data) ? data : []))
       .catch(() => setUsers([]));

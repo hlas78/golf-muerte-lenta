@@ -65,6 +65,9 @@ export async function PATCH(request, { params }) {
   if (body.password) {
     updates.passwordHash = await hashPassword(body.password);
   }
+  if (body.status) {
+    updates.status = body.status;
+  }
 
   console.log('updates', updates)
   console.log(await User.updateOne({ _id: id }, updates));

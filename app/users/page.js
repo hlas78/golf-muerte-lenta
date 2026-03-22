@@ -138,6 +138,36 @@ export default function UsersPage() {
     }
   };
 
+  const handleToggleStatus = async (user) => {
+    if (!user?._id) {
+      return;
+    }
+    const nextStatus = user.status === "baja" ? "active" : "baja";
+    try {
+      const res = await fetch(`/api/users/${user._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo actualizar.");
+      }
+      notifications.show({
+        title: nextStatus === "baja" ? "Jugador dado de baja" : "Jugador reactivado",
+        message: "",
+        color: "club",
+      });
+      loadUsers();
+    } catch (error) {
+      notifications.show({
+        title: "Error al actualizar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    }
+  };
+
   return (
     <main>
       <AppShell title="Usuarios">
@@ -294,15 +324,24 @@ export default function UsersPage() {
                 <div>
                   <Text fw={600}>{user.name}</Text>
                   <Text size="sm" c="dusk.6">
-                    {user.phone} · HC {user.handicap ?? 0} · {user.role} · Tee: {user.defaultTeeName || "BLANCAS"} · ID Grint: {user.grintId}
+                    {user.phone} · HC {user.handicap ?? 0} · {user.role} · Tee: {user.defaultTeeName || "BLANCAS"} · ID Grint: {user.grintId} · Estado: {user.status || "active"}
                   </Text>
                 </div>
-                <Button
-                  variant="light"
-                  onClick={() => handleSelect(user._id)}
-                >
-                  Editar
-                </Button>
+                <Group gap="xs">
+                  <Button
+                    variant="light"
+                    onClick={() => handleSelect(user._id)}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    variant="light"
+                    color={user.status === "baja" ? "club" : "clay"}
+                    onClick={() => handleToggleStatus(user)}
+                  >
+                    {user.status === "baja" ? "Reactivar" : "Dar de baja"}
+                  </Button>
+                </Group>
               </Group>
             ))
           )}
