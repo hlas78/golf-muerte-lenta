@@ -629,72 +629,100 @@ export default function RecordMultiPage() {
                   {meta.handicap ?? "--"}
                 </Text>
                 <Group gap="xs" mb="xs">
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => applyStrokePreset(playerId, "birdie")}
-                    disabled={locked}
-                  >
-                    Birdie
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => applyStrokePreset(playerId, "par")}
-                    disabled={locked}
-                  >
-                    Par
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => applyStrokePreset(playerId, "bogey")}
-                    disabled={locked}
-                  >
-                    Bogey
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => applyStrokePreset(playerId, "zopi")}
-                    disabled={locked}
-                  >
-                    Zopi
-                  </Button>
+                  {(() => {
+                    const parValue = meta.par;
+                    const strokesValue =
+                      entry?.strokes === "" || entry?.strokes == null
+                        ? null
+                        : Number(entry?.strokes);
+                    const isBirdie =
+                      parValue != null && strokesValue === parValue - 1;
+                    const isPar = parValue != null && strokesValue === parValue;
+                    const isBogey =
+                      parValue != null && strokesValue === parValue + 1;
+                    const isZopi =
+                      parValue != null && strokesValue === parValue + 2;
+                    return (
+                      <>
+                        <Button
+                          size="xs"
+                          variant={isBirdie ? "filled" : "light"}
+                          onClick={() => applyStrokePreset(playerId, "birdie")}
+                          disabled={locked}
+                        >
+                          Birdie
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={isPar ? "filled" : "light"}
+                          onClick={() => applyStrokePreset(playerId, "par")}
+                          disabled={locked}
+                        >
+                          Par
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={isBogey ? "filled" : "light"}
+                          onClick={() => applyStrokePreset(playerId, "bogey")}
+                          disabled={locked}
+                        >
+                          Bogey
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={isZopi ? "filled" : "light"}
+                          onClick={() => applyStrokePreset(playerId, "zopi")}
+                          disabled={locked}
+                        >
+                          Zopi
+                        </Button>
+                      </>
+                    );
+                  })()}
                 </Group>
                 <Group gap="xs" mb="xs">
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => applyPuttPreset(playerId, 0)}
-                    disabled={locked}
-                  >
-                    Hole out
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => applyPuttPreset(playerId, 1)}
-                    disabled={locked}
-                  >
-                    1 putt
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => applyPuttPreset(playerId, 2)}
-                    disabled={locked}
-                  >
-                    2 putt
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => applyPuttPreset(playerId, 3)}
-                    disabled={locked}
-                  >
-                    3 putt
-                  </Button>
+                  {(() => {
+                    const puttsValue =
+                      entry?.putts === "" || entry?.putts == null
+                        ? null
+                        : Number(entry?.putts);
+                    return (
+                      <>
+                        <Button
+                          size="xs"
+                          variant={puttsValue === 0 ? "filled" : "light"}
+                          onClick={() => applyPuttPreset(playerId, 0)}
+                          disabled={locked}
+                        >
+                          Hole out
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={puttsValue === 1 ? "filled" : "light"}
+                          onClick={() => applyPuttPreset(playerId, 1)}
+                          disabled={locked}
+                        >
+                          1 putt
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={puttsValue === 2 ? "filled" : "light"}
+                          onClick={() => applyPuttPreset(playerId, 2)}
+                          disabled={locked}
+                        >
+                          2 putt
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={puttsValue === 3 ? "filled" : "light"}
+                          onClick={() => applyPuttPreset(playerId, 3)}
+                          disabled={locked}
+                        >
+                          3 putt
+                        </Button>
+                      </>
+                    );
+                  })()}
                 </Group>
                 <Group grow align="flex-start" mb="xs" gap="xs">
                   <div className="gml-stepper">

@@ -294,7 +294,7 @@ export async function POST(request, { params }) {
           //   )
           // );
           // Grupo Muerte Lenta
-          sendMessage('120363405357623444@g.us', message);
+          // sendMessage('120363405357623444@g.us', message);
           // sendMessage('120363424386158848@g.us', message);
         } finally {
           pendingWinNotifications.delete(key);
@@ -405,7 +405,7 @@ export async function POST(request, { params }) {
           //   )
           // );
           // Grupo Muerte Lenta
-          sendMessage('120363405357623444@g.us', message);
+          // sendMessage('120363405357623444@g.us', message);
           // sendMessage('120363424386158848@g.us', message);
           
         } finally {

@@ -997,9 +997,24 @@ export default function RecordScorecardPage() {
               </Text>
             </Group>
             <Group gap="xs" mb="xs">
+              {(() => {
+                const parValue = holeMeta[hole.hole]?.par;
+                const strokesValue =
+                  hole.strokes === "" || hole.strokes == null
+                    ? null
+                    : Number(hole.strokes);
+                const isBirdie =
+                  parValue != null && strokesValue === parValue - 1;
+                const isPar = parValue != null && strokesValue === parValue;
+                const isBogey =
+                  parValue != null && strokesValue === parValue + 1;
+                const isZopi =
+                  parValue != null && strokesValue === parValue + 2;
+                return (
+                  <>
               <Button
                 size="xs"
-                variant="light"
+                variant={isBirdie ? "filled" : "light"}
                 onClick={() => applyStrokePreset(index, "birdie")}
                 disabled={locked || roundClosed}
               >
@@ -1007,7 +1022,7 @@ export default function RecordScorecardPage() {
               </Button>
               <Button
                 size="xs"
-                variant="light"
+                variant={isPar ? "filled" : "light"}
                 onClick={() => applyStrokePreset(index, "par")}
                 disabled={locked || roundClosed}
               >
@@ -1015,7 +1030,7 @@ export default function RecordScorecardPage() {
               </Button>
               <Button
                 size="xs"
-                variant="light"
+                variant={isBogey ? "filled" : "light"}
                 onClick={() => applyStrokePreset(index, "bogey")}
                 disabled={locked || roundClosed}
               >
@@ -1023,17 +1038,27 @@ export default function RecordScorecardPage() {
               </Button>
               <Button
                 size="xs"
-                variant="light"
+                variant={isZopi ? "filled" : "light"}
                 onClick={() => applyStrokePreset(index, "zopi")}
                 disabled={locked || roundClosed}
               >
                 Zopi
               </Button>
+                  </>
+                );
+              })()}
             </Group>
             <Group gap="xs" mb="xs">
+              {(() => {
+                const puttsValue =
+                  hole.putts === "" || hole.putts == null
+                    ? null
+                    : Number(hole.putts);
+                return (
+                  <>
               <Button
                 size="xs"
-                variant="light"
+                variant={puttsValue === 0 ? "filled" : "light"}
                 onClick={() => applyPuttPreset(index, 0)}
                 disabled={locked || roundClosed}
               >
@@ -1041,7 +1066,7 @@ export default function RecordScorecardPage() {
               </Button>
               <Button
                 size="xs"
-                variant="light"
+                variant={puttsValue === 1 ? "filled" : "light"}
                 onClick={() => applyPuttPreset(index, 1)}
                 disabled={locked || roundClosed}
               >
@@ -1049,7 +1074,7 @@ export default function RecordScorecardPage() {
               </Button>
               <Button
                 size="xs"
-                variant="light"
+                variant={puttsValue === 2 ? "filled" : "light"}
                 onClick={() => applyPuttPreset(index, 2)}
                 disabled={locked || roundClosed}
               >
@@ -1057,12 +1082,15 @@ export default function RecordScorecardPage() {
               </Button>
               <Button
                 size="xs"
-                variant="light"
+                variant={puttsValue === 3 ? "filled" : "light"}
                 onClick={() => applyPuttPreset(index, 3)}
                 disabled={locked || roundClosed}
               >
                 3 putt
               </Button>
+                  </>
+                );
+              })()}
               <Button
                 size="xs"
                 variant={hole.water ? "filled" : "light"}

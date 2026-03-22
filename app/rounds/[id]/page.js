@@ -421,6 +421,55 @@ export default function RoundDetailPage() {
     return winners;
   }, [scorecards, round, advantageStrokesByPlayer]);
 
+  const liveBonusCells = useMemo(() => {
+    if (!scorecards.length || !round?.holes) {
+      return {};
+    }
+    const bonuses = {};
+    scorecards.forEach((card) => {
+      const playerId = card.player?._id?.toString();
+      if (!playerId) {
+        return;
+      }
+      card.holes?.forEach((entry) => {
+        if (!entry?.hole) {
+          return;
+        }
+        const strokes = entry.strokes;
+        if (strokes == null || strokes === "") {
+          return;
+        }
+        const par = holeMeta[entry.hole]?.par;
+        const diff =
+          Number.isFinite(par) && Number.isFinite(strokes)
+            ? strokes - par
+            : null;
+        const isBirdieOrBetter = diff != null && diff <= -1;
+        const isSandyParOrBetter =
+          entry.sandy && diff != null && diff <= 0;
+        const isWetParOrBetter = entry.water && diff != null && diff <= 0;
+        const isHoleOut =
+          entry.putts === 0 &&
+          ((entry.holeOut && Number.isFinite(strokes)) ||
+            (diff != null && diff <= 0));
+        const isOhYes = par === 3 && entry.ohYes;
+        if (
+          isBirdieOrBetter ||
+          isSandyParOrBetter ||
+          isWetParOrBetter ||
+          isHoleOut ||
+          isOhYes
+        ) {
+          if (!bonuses[playerId]) {
+            bonuses[playerId] = new Set();
+          }
+          bonuses[playerId].add(entry.hole);
+        }
+      });
+    });
+    return bonuses;
+  }, [scorecards, round, holeMeta]);
+
   const courseHandicapByPlayer = useMemo(() => {
     if (!scorecards.length) {
       return {};
@@ -1433,7 +1482,8 @@ export default function RoundDetailPage() {
                           const isWinningCell = Boolean(
                             playerId &&
                               (winningCells[playerId]?.has(hole) ||
-                                liveWinningCells[playerId]?.has(hole))
+                                liveWinningCells[playerId]?.has(hole) ||
+                                liveBonusCells[playerId]?.has(hole))
                           );
                           const advantageCount = showAdvantages
                             ? strokesMap[hole] || 0
@@ -1677,7 +1727,7 @@ export default function RoundDetailPage() {
           )}
         </Card>
 
-        <Card mt="lg">
+        {/* <Card mt="lg">
           <Group justify="space-between" mb="sm">
             <Text fw={700}>Transacciones optimizadas</Text>
           </Group>
@@ -1705,7 +1755,7 @@ export default function RoundDetailPage() {
               );
             })
           )}
-        </Card>
+        </Card> */}
       </AppShell>
       <Modal
         opened={confirmOpen}

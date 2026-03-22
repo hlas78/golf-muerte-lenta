@@ -326,8 +326,8 @@ export async function POST(request, { params }) {
     "Resumen de ganancias: 🤑",
     ...summaryLines,
     "",
-    "Pagos directos: 💰 ",
-    ...(transfersLines.length ? transfersLines : ["- Sin movimientos"]),
+    // "Pagos directos: 💰 ",
+    // ...(transfersLines.length ? transfersLines : ["- Sin movimientos"]),
   ].join("\n");
 
   await Promise.allSettled(
