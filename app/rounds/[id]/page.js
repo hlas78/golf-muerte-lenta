@@ -1356,6 +1356,16 @@ export default function RoundDetailPage() {
                     Captura por hoyo
                   </Button>
                 ) : null}
+                {isAdmin ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    component={Link}
+                    href={`/rounds/${params?.id}/record-fast`}
+                  >
+                    Captura rápida
+                  </Button>
+                ) : null}
                 {canApprove ? (
                   <Button
                     size="xs"
@@ -1686,38 +1696,85 @@ export default function RoundDetailPage() {
                           Sin movimientos registrados.
                         </Text>
                       ) : (
-                        items.map((payment, idx) => {
-                          const isWin = String(payment.to) === playerId;
-                          const rivalId = isWin
-                            ? String(payment.from)
-                            : String(payment.to);
-                          const rival = scorecards.find(
-                            (card) => String(card.player?._id) === rivalId
+                        (() => {
+                          const wins = items.filter(
+                            (payment) => String(payment.to) === playerId
                           );
-                          const label =
-                            ITEM_LABELS[payment.item] || payment.item;
+                          const losses = items.filter(
+                            (payment) => String(payment.from) === playerId
+                          );
+                          const totalsByItem = wins.reduce((acc, payment) => {
+                            const label = ITEM_LABELS[payment.item] || payment.item;
+                            const holeLabel = payment.hole
+                              ? `· Hoyo ${payment.hole}`
+                              : "";
+                            const key = `${label} ${holeLabel}`;
+                            acc[key] = (acc[key] || 0) + payment.amount;
+                            return acc;
+                          }, {});
+                          const entries = Object.entries(totalsByItem);
                           return (
-                            <Group key={`${card._id}-${idx}`} mb="xs">
-                              <Badge
-                                color={isWin ? "club" : "clay"}
-                                variant="light"
-                              >
-                                {isWin ? "Gana" : "Paga"}
-                              </Badge>
-                              <Text size="sm">
-                                {label}
-                                {payment.hole ? ` · Hoyo ${payment.hole}` : ""}
-                                {rival ? ` · vs ${rival.player?.name}` : ""}
-                              </Text>
+                            <>
                               <Text
                                 size="sm"
-                                c={isWin ? "club.7" : "clay.7"}
+                                c={value >= 0 ? "club.7" : "clay.7"}
+                                mb="xs"
                               >
-                                {isWin ? "+" : "-"}${payment.amount}
+                                {value >= 0 ? "Total a favor" : "Total en contra"}:
+                                {value >= 0 ? " +" : " -"}${Math.abs(value)}
                               </Text>
-                            </Group>
+                              {entries.length > 0 ? (
+                                <>
+                                  {entries.map(([label, amount]) => (
+                                    <Group key={`${card._id}-${label}`} mb="xs">
+                                      <Badge color="club" variant="light">
+                                        Gana
+                                      </Badge>
+                                      <Text size="sm">{label}</Text>
+                                      <Text size="sm" c="club.7">
+                                        +${amount}
+                                      </Text>
+                                    </Group>
+                                  ))}
+                                </>
+                              ) : null}
+                              {losses.length > 0 ? (
+                                <>
+                                  <Text size="sm" c="clay.7" mt="sm" mb="xs">
+                                    Detalle de pagos
+                                  </Text>
+                                  {losses.map((payment, idx) => {
+                                    const rivalId = String(payment.to);
+                                    const rival = scorecards.find(
+                                      (card) => String(card.player?._id) === rivalId
+                                    );
+                                    const label =
+                                      ITEM_LABELS[payment.item] || payment.item;
+                                    return (
+                                      <Group key={`${card._id}-loss-${idx}`} mb="xs">
+                                        <Badge color="clay" variant="light">
+                                          Paga
+                                        </Badge>
+                                        <Text size="sm">
+                                          {label}
+                                          {payment.hole ? ` · Hoyo ${payment.hole}` : ""}
+                                          {rival ? ` · vs ${rival.player?.name}` : ""}
+                                        </Text>
+                                        <Text size="sm" c="clay.7">
+                                          -${payment.amount}
+                                        </Text>
+                                      </Group>
+                                    );
+                                  })}
+                                </>
+                              ) : entries.length === 0 ? (
+                                <Text size="sm" c="dusk.6">
+                                  Sin movimientos registrados.
+                                </Text>
+                              ) : null}
+                            </>
                           );
-                        })
+                        })()
                       )}
                     </Accordion.Panel>
                   </Accordion.Item>
