@@ -21,7 +21,7 @@ function buildRecordLink(roundId, token) {
   if (token) {
     params.set("token", token);
   }
-  return `${baseUrl}/rounds/${roundId}/record?${params.toString()}`;
+  return `${baseUrl}/rounds/${roundId}?${params.toString()}`;
 }
 
 async function getConfigSnapshot() {
