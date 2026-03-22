@@ -1,0 +1,41 @@
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import connectDb from "@/lib/db";
+import Round from "@/lib/models/Round";
+import Scorecard from "@/lib/models/Scorecard";
+import User from "@/lib/models/User";
+import { verifyToken } from "@/lib/auth";
+
+export async function POST(request, { params }) {
+  await connectDb();
+  const cookieStore = await cookies();
+  const token = cookieStore.get("gml_token")?.value;
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const payload = verifyToken(token);
+  const actor = await User.findById(payload.id);
+  if (!actor || actor.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id, scorecardId } = await params;
+  const round = await Round.findById(id);
+  if (!round) {
+    return NextResponse.json({ error: "Round not found" }, { status: 404 });
+  }
+  if (round.status === "closed") {
+    return NextResponse.json({ error: "Round closed" }, { status: 400 });
+  }
+
+  const scorecard = await Scorecard.findById(scorecardId);
+  if (!scorecard) {
+    return NextResponse.json({ error: "Scorecard not found" }, { status: 404 });
+  }
+
+  scorecard.accepted = false;
+  scorecard.acceptedBy = null;
+  await scorecard.save();
+
+  return NextResponse.json({ ok: true });
+}

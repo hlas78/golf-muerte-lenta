@@ -204,7 +204,17 @@ export default function RecordScorecardPage() {
             )
           : null;
         if (existing?.holes?.length) {
-          setLocked(Boolean(existing.accepted));
+          const isAdmin = role === "admin";
+          if (existing.accepted && isAdmin && !roundClosed) {
+            fetch(
+              `/api/rounds/${params.id}/scorecards/${existing._id}/reopen`,
+              { method: "POST" }
+            )
+              .then(() => setLocked(false))
+              .catch(() => setLocked(false));
+          } else {
+            setLocked(Boolean(existing.accepted));
+          }
           if (existing.teeName && round?.courseSnapshot?.tees) {
             const tees = round.courseSnapshot.tees || {};
             const allTees = [...(tees.male || []), ...(tees.female || [])];

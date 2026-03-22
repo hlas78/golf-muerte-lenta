@@ -132,6 +132,20 @@ const SARCASTIC_MESSAGES = [
   "Resumen listo. Hoy se paga en serio.",
 ];
 
+const ITEM_LABELS = {
+  holeWinner: "",
+  medalFront: "Medal vuelta 1",
+  medalBack: "Medal vuelta 2",
+  match: "Match",
+  sandyPar: "Sandy ",
+  birdie: "Birdie ",
+  eagle: "Aguila ",
+  albatross: "Albatross ",
+  holeOut: "Hole out ",
+  wetPar: "Wet par ",
+  ohYes: "Oh yes ",
+};
+
 function buildSummary(payments) {
   const summary = {};
   payments.forEach((payment) => {
@@ -299,39 +313,234 @@ export async function POST(request, { params }) {
   const summary = buildSummary(payments);
   const optimizedTransfers = minimizeTransfers(summary);
 
+  const tees = round.courseSnapshot?.tees || {};
+  const allTees = [...(tees.male || []), ...(tees.female || [])];
+  const fallbackTee =
+    allTees.find((option) => option.tee_name === round.teeName) || allTees[0];
+  const normalizedFallbackHoles = normalizeHoleHandicaps(
+    fallbackTee?.holes || [],
+    round
+  );
+  const holeHandicaps =
+    normalizedFallbackHoles.map((hole, idx) => ({
+      hole: hole.hole ?? idx + 1,
+      handicap: hole.handicap,
+      par: hole.par,
+    })) || [];
+
+  const populatedScorecards = await Scorecard.find({ round: round._id })
+    .populate("player", "-passwordHash")
+    .sort({ createdAt: 1 });
+  const holeHandicapsByPlayer = {};
+  const courseHandicapByPlayer = {};
+  const strokesByPlayerHole = {};
+  let minCourseHandicap = Number.POSITIVE_INFINITY;
+
+  populatedScorecards.forEach((card) => {
+    const playerId = card.player?._id?.toString();
+    if (!playerId) {
+      return;
+    }
+    const playerTee =
+      card.teeName ||
+      round.playerTees?.find(
+        (entry) => String(entry.player) === String(card.player?._id)
+      )?.teeName;
+    const tee =
+      allTees.find((option) => option.tee_name === playerTee) || fallbackTee;
+    const normalizedPlayerHoles = normalizeHoleHandicaps(
+      tee?.holes || [],
+      round
+    );
+    holeHandicapsByPlayer[playerId] =
+      normalizedPlayerHoles.map((hole, idx) => ({
+        hole: hole.hole ?? idx + 1,
+        handicap: hole.handicap,
+        par: hole.par,
+      })) || holeHandicaps;
+
+    const courseHandicap = getCourseHandicapForRound(
+      tee,
+      round,
+      card.player?.handicap
+    );
+    courseHandicapByPlayer[playerId] = courseHandicap;
+    if (Number.isFinite(courseHandicap) && courseHandicap < minCourseHandicap) {
+      minCourseHandicap = courseHandicap;
+    }
+
+    const holeStrokes = {};
+    (card.holes || []).forEach((hole) => {
+      holeStrokes[hole.hole] = hole.strokes;
+    });
+    strokesByPlayerHole[playerId] = holeStrokes;
+  });
+
+  const strokesMapByPlayer = {};
+  const netTotalsByPlayer = {};
+  const frontEnd = Math.min(round.holes, 9);
+  const effectiveMinHandicap = Number.isFinite(minCourseHandicap)
+    ? minCourseHandicap
+    : 0;
+  const getNetTotalForRange = (card, strokesMap, startHole, endHole) => {
+    let netTotal = 0;
+    for (let i = startHole; i <= endHole; i += 1) {
+      const hole = card.holes?.find((entry) => entry.hole === i);
+      const strokes = hole?.strokes || 0;
+      netTotal += strokes - (strokesMap[i] || 0);
+    }
+    return netTotal;
+  };
+
+  populatedScorecards.forEach((card) => {
+    const playerId = card.player?._id?.toString();
+    if (!playerId) {
+      return;
+    }
+    const courseHandicap = courseHandicapByPlayer[playerId] ?? 0;
+    const relativeHandicap = Math.max(0, courseHandicap - effectiveMinHandicap);
+    const strokesMap = allocateStrokes(
+      relativeHandicap,
+      holeHandicapsByPlayer[playerId] || holeHandicaps,
+      round.holes
+    );
+    strokesMapByPlayer[playerId] = strokesMap;
+    const frontNet = getNetTotalForRange(card, strokesMap, 1, frontEnd);
+    const backNet =
+      round.holes > 9
+        ? getNetTotalForRange(card, strokesMap, 10, round.holes)
+        : null;
+    const matchNet = getNetTotalForRange(card, strokesMap, 1, round.holes);
+    netTotalsByPlayer[playerId] = {
+      front: frontNet,
+      back: backNet,
+      match: matchNet,
+    };
+  });
+
   const participants = await User.find({
     _id: { $in: Array.from(new Set(round.players || [])) },
   });
-  const summaryLines = participants.map((player) => {
-    const amount = summary[String(player._id)] || 0;
-    const sign = amount >= 0 ? "+" : "-";
-    return `- ${player.name}: ${sign}$${Math.abs(amount)}`;
-  });
-  const transfersLines = optimizedTransfers.map((transfer) => {
-    const from = participants.find(
-      (player) => String(player._id) === String(transfer.from)
-    );
-    const to = participants.find(
-      (player) => String(player._id) === String(transfer.to)
-    );
-    return `- ${from?.name || "Jugador"} -> ${to?.name || "Jugador"}: $${transfer.amount}`;
-  });
   const messageTitle = "⛳*La muerte lenta*⛳";
   const randomMessage = `☠️ ${SARCASTIC_MESSAGES[Math.floor(Math.random() * SARCASTIC_MESSAGES.length)]} ☠️`;
-  const whatsappMessage = [
-    messageTitle,
-    "",
-    randomMessage,
-    "",
-    "Resumen de ganancias: 🤑",
-    ...summaryLines,
-    "",
-    // "Pagos directos: 💰 ",
-    // ...(transfersLines.length ? transfersLines : ["- Sin movimientos"]),
-  ].join("\n");
+  const getNetForItem = (playerId, item) => {
+    const netTotals = netTotalsByPlayer[playerId];
+    if (!netTotals) {
+      return null;
+    }
+    if (item === "medalFront") return netTotals.front;
+    if (item === "medalBack") return netTotals.back;
+    if (item === "match") return netTotals.match;
+    return null;
+  };
+
+  const buildNetExtra = (playerId, item) => {
+    const net = getNetForItem(playerId, item);
+    return Number.isFinite(net) ? `· Net ${net}` : "";
+  };
+
+  const groupedWinsByPlayer = payments.reduce((acc, payment) => {
+    const toId = String(payment.to);
+    const label = ITEM_LABELS[payment.item] || payment.item;
+    const holeLabel = payment.hole ? ` Hoyo ${payment.hole}` : "";
+    const key = `${label}${holeLabel ? ` ${holeLabel}` : ""}`;
+    if (!acc[toId]) {
+      acc[toId] = {};
+    }
+    const entry = acc[toId][key] || { amount: 0, extra: "" };
+    entry.amount += payment.amount;
+    if (payment.item === "holeWinner" && payment.hole) {
+      const strokes = strokesByPlayerHole?.[toId]?.[payment.hole];
+      if (Number.isFinite(strokes)) {
+        entry.extra = `· ${strokes} golpes`;
+      }
+    }
+    if (["medalFront", "medalBack", "match"].includes(payment.item)) {
+      const netExtra = buildNetExtra(toId, payment.item);
+      if (netExtra) {
+        entry.extra = netExtra;
+      }
+    }
+    acc[toId][key] = entry;
+    return acc;
+  }, {});
 
   await Promise.allSettled(
-    participants.map((player) => sendMessage(player.phone, whatsappMessage))
+    participants.map((player) => {
+      const playerId = String(player._id);
+      const wins = groupedWinsByPlayer[playerId] || {};
+      const winEntries = Object.entries(wins);
+      const winTotal = winEntries.reduce(
+        (sum, [, entry]) => sum + (entry?.amount || 0),
+        0
+      );
+      const winLines = winEntries.length
+        ? winEntries.map(
+            ([label, entry]) => {
+              const extra = entry?.extra ? ` ${entry.extra}` : "";
+              return `- ${label}: +$${entry.amount}${extra}`;
+            }
+          )
+        : ["- Sin ganancias 😭  💸"];
+      const losses = payments.filter(
+        (payment) => String(payment.from) === playerId
+      );
+      const lossTotal = losses.reduce((sum, payment) => sum + payment.amount, 0);
+      const lossLines = losses.length
+        ? losses.map((payment) => {
+            const rival = participants.find(
+              (p) => String(p._id) === String(payment.to)
+            );
+            const label = ITEM_LABELS[payment.item]; // || payment.item;
+            const holeLabel = payment.hole ? `Hoyo ${payment.hole}` : "";
+            const rivalLabel = rival ? `vs ${rival.name}` : "vs Jugador";
+            const extras = [];
+            if (payment.item === "holeWinner" && payment.hole) {
+              const loserStrokes =
+                strokesByPlayerHole?.[playerId]?.[payment.hole];
+              const winnerStrokes =
+                strokesByPlayerHole?.[String(payment.to)]?.[payment.hole];
+              if (Number.isFinite(winnerStrokes)) {
+                extras.push(`. ${winnerStrokes}`);
+              }
+              if (Number.isFinite(loserStrokes)) {
+                extras.push(`vs ${loserStrokes}`);
+              }
+            }
+            if (["medalFront", "medalBack", "match"].includes(payment.item)) {
+              const winnerNet = getNetForItem(
+                String(payment.to),
+                payment.item
+              );
+              const loserNet = getNetForItem(playerId, payment.item);
+              if (Number.isFinite(winnerNet)) {
+                extras.push(`. ${winnerNet} vs `);
+              }
+              if (Number.isFinite(loserNet)) {
+                extras.push(`${loserNet}`);
+              }
+            }
+            const extraLabel = extras.length ? ` ${extras.join(" ")}` : "";
+            return `- ${label}${holeLabel ? `${holeLabel}` : ""} ${rivalLabel}: -$${payment.amount}${extraLabel}`;
+          })
+        : ["- Sin pérdidas"];
+      const netTotal = summary[playerId] || 0;
+      const whatsappMessage = [
+        messageTitle,
+        "",
+        randomMessage,
+        "",
+        `Resumen de ${player.name}: 🧾`,
+        `Neto final: *${netTotal >= 0 ? "Gana " : "Pierde "}$${Math.abs(netTotal)}*`,
+        "",
+        `Total ganado: $${winTotal} 🤑`,
+        ...winLines,
+        "",
+        `Detalle de pérdidas: -$${lossTotal}`,
+        ...lossLines,
+      ].join("\n");
+      return sendMessage(player.phone, whatsappMessage);
+    })
   );
 
   round.status = "closed";
