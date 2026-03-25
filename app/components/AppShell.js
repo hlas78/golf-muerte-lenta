@@ -25,6 +25,7 @@ export default function AppShell({
     }
     if (userRole === "admin") {
       items.push({ label: "Usuarios", href: "/users" });
+      items.push({ label: "Reportes", href: "/reports" });
     }
     if (showAdminNav) {
       items.push({ label: "Aprobaciones", href: "/admin/approvals" });

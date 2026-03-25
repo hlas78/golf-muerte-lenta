@@ -45,11 +45,18 @@ export default function NewRoundPage() {
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [playerTees, setPlayerTees] = useState({});
   const [description, setDescription] = useState("");
+  const [bets, setBets] = useState({ culebra: 0 });
   const [startedAt, setStartedAt] = useState(() =>
     toLocalDateTimeValue(new Date())
   );
   const [playersModalOpen, setPlayersModalOpen] = useState(false);
   const [editingTeeByPlayer, setEditingTeeByPlayer] = useState({});
+  const [individualBets, setIndividualBets] = useState([]);
+  const [betModalOpen, setBetModalOpen] = useState(false);
+  const [betDraft, setBetDraft] = useState(null);
+  const [culebraEnabled, setCulebraEnabled] = useState(false);
+  const [culebraPlayers, setCulebraPlayers] = useState([]);
+  const [culebraAmount, setCulebraAmount] = useState(0);
 
   useEffect(() => {
     fetch("/api/me")
@@ -74,6 +81,22 @@ export default function NewRoundPage() {
           message: "Intenta mas tarde.",
           color: "clay",
         });
+      });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.bets) {
+          setBets((prev) => ({ ...prev, ...data.bets }));
+          if (Number.isFinite(data.bets.culebra)) {
+            setCulebraAmount(data.bets.culebra);
+          }
+        }
+      })
+      .catch(() => {
+        setBets((prev) => ({ ...prev }));
       });
   }, []);
 
@@ -157,6 +180,84 @@ export default function NewRoundPage() {
     nineType: holes === "9" ? nineType : "front",
   };
 
+  const createEmptyBet = () => ({
+    id: `bet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    playerA: "",
+    playerB: "",
+      amounts: {
+        front: 0,
+        back: 0,
+        round: 0,
+        hole: 0,
+        birdie: 0,
+        sandy: 0,
+        wet: 0,
+        ohYes: 0,
+      },
+  });
+
+  const playerSelectionOptions = playerOptions.filter((player) =>
+    selectedPlayers.includes(player.value)
+  );
+
+  useEffect(() => {
+    setIndividualBets((prev) =>
+      prev.filter(
+        (bet) =>
+          selectedPlayers.includes(bet.playerA) &&
+          selectedPlayers.includes(bet.playerB)
+      )
+    );
+  }, [selectedPlayers]);
+
+  useEffect(() => {
+    setCulebraPlayers((prev) =>
+      prev.filter((playerId) => selectedPlayers.includes(playerId))
+    );
+  }, [selectedPlayers]);
+
+  const openNewBet = () => {
+    setBetDraft(createEmptyBet());
+    setBetModalOpen(true);
+  };
+
+  const editBet = (bet) => {
+    setBetDraft({ ...bet, amounts: { ...bet.amounts } });
+    setBetModalOpen(true);
+  };
+
+  const removeBet = (betId) => {
+    setIndividualBets((prev) => prev.filter((bet) => bet.id !== betId));
+  };
+
+  const saveBet = () => {
+    if (!betDraft?.playerA || !betDraft?.playerB) {
+      notifications.show({
+        title: "Faltan jugadores",
+        message: "Selecciona ambos jugadores.",
+        color: "clay",
+      });
+      return;
+    }
+    if (betDraft.playerA === betDraft.playerB) {
+      notifications.show({
+        title: "Jugadores invalidos",
+        message: "Selecciona jugadores distintos.",
+        color: "clay",
+      });
+      return;
+    }
+    setIndividualBets((prev) => {
+      const exists = prev.find((bet) => bet.id === betDraft.id);
+      if (exists) {
+        return prev.map((bet) => (bet.id === betDraft.id ? betDraft : bet));
+      }
+      return [...prev, betDraft];
+    });
+    setBetModalOpen(false);
+    setBetDraft(null);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (role === "player") {
@@ -199,6 +300,12 @@ export default function NewRoundPage() {
             player: playerId,
             teeName: playerTees[playerId],
           })),
+          individualBets,
+          culebra: {
+            enabled: culebraEnabled,
+            players: culebraPlayers,
+            amount: Number(culebraAmount) || 0,
+          },
           description: description.trim(),
           startedAt: startedAtValue,
         }),
@@ -313,6 +420,202 @@ export default function NewRoundPage() {
             </Button>
           </Group>
         </Modal>
+        <Modal
+          opened={betModalOpen}
+          onClose={() => setBetModalOpen(false)}
+          title="Raya individual"
+          centered
+        >
+          {selectedPlayers.length < 2 ? (
+            <Text size="sm" c="dusk.6">
+              Selecciona al menos 2 jugadores para crear una raya individual.
+            </Text>
+          ) : (
+            <>
+              <Select
+                label="Jugador A"
+                data={playerSelectionOptions.map((player) => ({
+                  value: player.value,
+                  label: player.label,
+                }))}
+                value={betDraft?.playerA || ""}
+                onChange={(value) =>
+                  setBetDraft((prev) => ({ ...prev, playerA: value || "" }))
+                }
+              />
+              <Select
+                label="Jugador B"
+                data={playerSelectionOptions.map((player) => ({
+                  value: player.value,
+                  label: player.label,
+                }))}
+                value={betDraft?.playerB || ""}
+                onChange={(value) =>
+                  setBetDraft((prev) => ({ ...prev, playerB: value || "" }))
+                }
+              />
+              <Group grow mt="md">
+                <TextInput
+                  label="Vuelta 1"
+                  type="number"
+                  value={betDraft?.amounts?.front ?? 0}
+                  onChange={(event) =>
+                    setBetDraft((prev) => ({
+                      ...prev,
+                      amounts: {
+                        ...prev.amounts,
+                        front:
+                          Number(event?.currentTarget?.value ?? "") || 0,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  label="Vuelta 2"
+                  type="number"
+                  value={betDraft?.amounts?.back ?? 0}
+                  onChange={(event) =>
+                    setBetDraft((prev) => ({
+                      ...prev,
+                      amounts: {
+                        ...prev.amounts,
+                        back: Number(event?.currentTarget?.value ?? "") || 0,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  label="Ronda 18"
+                  type="number"
+                  value={betDraft?.amounts?.round ?? 0}
+                  onChange={(event) =>
+                    setBetDraft((prev) => ({
+                      ...prev,
+                      amounts: {
+                        ...prev.amounts,
+                        round:
+                          Number(event?.currentTarget?.value ?? "") || 0,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  label="Hoyo ganado"
+                  type="number"
+                  value={betDraft?.amounts?.hole ?? 0}
+                  onChange={(event) =>
+                    setBetDraft((prev) => ({
+                      ...prev,
+                      amounts: {
+                        ...prev.amounts,
+                        hole: Number(event?.currentTarget?.value ?? "") || 0,
+                      },
+                    }))
+                  }
+                />
+              </Group>
+              <Group grow mt="md">
+                <TextInput
+                  label="Birdie o menor"
+                  type="number"
+                  value={betDraft?.amounts?.birdie ?? 0}
+                  onChange={(event) =>
+                    setBetDraft((prev) => ({
+                      ...prev,
+                      amounts: {
+                        ...prev.amounts,
+                        birdie:
+                          Number(event?.currentTarget?.value ?? "") || 0,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  label="Sandy"
+                  type="number"
+                  value={betDraft?.amounts?.sandy ?? 0}
+                  onChange={(event) =>
+                    setBetDraft((prev) => ({
+                      ...prev,
+                      amounts: {
+                        ...prev.amounts,
+                        sandy:
+                          Number(event?.currentTarget?.value ?? "") || 0,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  label="Wet"
+                  type="number"
+                  value={betDraft?.amounts?.wet ?? 0}
+                  onChange={(event) =>
+                    setBetDraft((prev) => ({
+                      ...prev,
+                      amounts: {
+                        ...prev.amounts,
+                        wet: Number(event?.currentTarget?.value ?? "") || 0,
+                      },
+                    }))
+                  }
+                />
+                <TextInput
+                  label="Oh yes"
+                  type="number"
+                  value={betDraft?.amounts?.ohYes ?? 0}
+                  onChange={(event) =>
+                    setBetDraft((prev) => ({
+                      ...prev,
+                      amounts: {
+                        ...prev.amounts,
+                        ohYes:
+                          Number(event?.currentTarget?.value ?? "") || 0,
+                      },
+                    }))
+                  }
+                />
+              </Group>
+              <Group mt="md">
+                <Text size="xs" c="dusk.6">
+                  Predefinir montos:
+                </Text>
+                {[10, 20, 50, 100].map((preset) => (
+                  <Button
+                    key={preset}
+                    size="xs"
+                    variant="light"
+                    onClick={() =>
+                      setBetDraft((prev) => ({
+                        ...prev,
+                        amounts: {
+                          ...prev.amounts,
+                          front: preset,
+                          back: preset,
+                          round: preset,
+                          hole: preset,
+                          birdie: preset,
+                          sandy: preset,
+                          wet: preset,
+                          ohYes: preset,
+                        },
+                      }))
+                    }
+                  >
+                    ${preset}
+                  </Button>
+                ))}
+              </Group>
+              <Group justify="flex-end" mt="md">
+                <Button variant="light" onClick={() => setBetModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button color="club" onClick={saveBet}>
+                  Guardar
+                </Button>
+              </Group>
+            </>
+          )}
+        </Modal>
         <Card>
           <form className="gml-form" onSubmit={handleSubmit}>
             <Select
@@ -370,6 +673,175 @@ export default function NewRoundPage() {
                     .join(", ")}
                 </Text>
               ) : null}
+            </div>
+            <div>
+              <Text size="sm" fw={600} mb={6}>
+                Apuestas
+              </Text>
+              <Text size="xs" c="dusk.6" mb="sm">
+                Sistema base: Rayas grupales (default)
+              </Text>
+              <Group justify="space-between" mb="sm">
+                <Button
+                  variant="light"
+                  onClick={openNewBet}
+                  disabled={selectedPlayers.length < 2}
+                >
+                  Agregar raya individual
+                </Button>
+                <Text size="xs" c="dusk.6">
+                  {individualBets.length} configuradas
+                </Text>
+              </Group>
+              {individualBets.length > 0 ? (
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Jugadores</Table.Th>
+                      <Table.Th>V1</Table.Th>
+                      <Table.Th>V2</Table.Th>
+                      <Table.Th>R18</Table.Th>
+                      <Table.Th>Hoyo</Table.Th>
+                      <Table.Th>Birdie+</Table.Th>
+                      <Table.Th>Sandy</Table.Th>
+                      <Table.Th>Wet</Table.Th>
+                      <Table.Th>Oh yes</Table.Th>
+                      <Table.Th />
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {individualBets.map((bet) => {
+                      const playerA = playerOptions.find(
+                        (option) => option.value === bet.playerA
+                      );
+                      const playerB = playerOptions.find(
+                        (option) => option.value === bet.playerB
+                      );
+                      return (
+                        <Table.Tr key={bet.id}>
+                          <Table.Td>
+                            {playerA?.name || "Jugador"} vs{" "}
+                            {playerB?.name || "Jugador"}
+                          </Table.Td>
+                          <Table.Td>{bet.amounts.front}</Table.Td>
+                          <Table.Td>{bet.amounts.back}</Table.Td>
+                          <Table.Td>{bet.amounts.round}</Table.Td>
+                          <Table.Td>{bet.amounts.hole}</Table.Td>
+                          <Table.Td>{bet.amounts.birdie}</Table.Td>
+                          <Table.Td>{bet.amounts.sandy}</Table.Td>
+                          <Table.Td>{bet.amounts.wet}</Table.Td>
+                          <Table.Td>{bet.amounts.ohYes}</Table.Td>
+                          <Table.Td>
+                            <Group gap="xs">
+                              <Button
+                                size="xs"
+                                variant="light"
+                                onClick={() => editBet(bet)}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="light"
+                                color="clay"
+                                onClick={() => removeBet(bet.id)}
+                              >
+                                Quitar
+                              </Button>
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              ) : (
+                <Text size="xs" c="dusk.6">
+                  No hay rayas individuales configuradas.
+                </Text>
+              )}
+            </div>
+            <div>
+              <Text size="sm" fw={600} mb={6}>
+                Culebra
+              </Text>
+              <Group align="center" mb="sm">
+                <Button
+                  variant={culebraEnabled ? "filled" : "light"}
+                  color={culebraEnabled ? "club" : "dusk"}
+                  onClick={() => setCulebraEnabled((prev) => !prev)}
+                  disabled={selectedPlayers.length === 0}
+                >
+                  {culebraEnabled ? "Activada" : "Activar culebra"}
+                </Button>
+                <TextInput
+                  label="Monto"
+                  type="number"
+                  value={culebraAmount}
+                  onChange={(event) =>
+                    setCulebraAmount(
+                      Number(event?.currentTarget?.value ?? "") || 0
+                    )
+                  }
+                  size="xs"
+                />
+                <Button
+                  variant="light"
+                  size="xs"
+                  onClick={() =>
+                    setCulebraPlayers((prev) =>
+                      prev.length === selectedPlayers.length
+                        ? []
+                        : [...selectedPlayers]
+                    )
+                  }
+                  disabled={!culebraEnabled}
+                >
+                  {culebraPlayers.length === selectedPlayers.length
+                    ? "Limpiar todos"
+                    : "Seleccionar todos"}
+                </Button>
+              </Group>
+              {culebraEnabled ? (
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Jugador</Table.Th>
+                      <Table.Th />
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {playerSelectionOptions.map((player) => {
+                      const selected = culebraPlayers.includes(player.value);
+                      return (
+                        <Table.Tr key={`culebra-${player.value}`}>
+                          <Table.Td>{player.name}</Table.Td>
+                          <Table.Td>
+                            <Button
+                              size="xs"
+                              variant={selected ? "filled" : "light"}
+                              color={selected ? "club" : "dusk"}
+                              onClick={() =>
+                                setCulebraPlayers((prev) =>
+                                  prev.includes(player.value)
+                                    ? prev.filter((id) => id !== player.value)
+                                    : [...prev, player.value]
+                                )
+                              }
+                            >
+                              {selected ? "Quitar" : "Agregar"}
+                            </Button>
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              ) : (
+                <Text size="xs" c="dusk.6">
+                  Activa la culebra para seleccionar participantes.
+                </Text>
+              )}
             </div>
             <TextInput
               label="Inicio de la jugada"

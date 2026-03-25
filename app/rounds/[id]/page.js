@@ -42,7 +42,31 @@ const ITEM_LABELS = {
   holeOut: "Hole out",
   wetPar: "Wet par",
   ohYes: "Oh yes",
+  culebra: "Culebra",
+  indFront: "Vuelta 1 (Raya)",
+  indBack: "Vuelta 2 (Raya)",
+  indRound: "Ronda 18 (Raya)",
+  indHole: "Hoyo ganado (Raya)",
+  indBirdie: "Birdie+ (Raya)",
+  indSandy: "Sandy (Raya)",
+  indWet: "Wet (Raya)",
+  indOhYes: "Oh yes (Raya)",
 };
+
+const ITEM_ORDER = Object.keys(ITEM_LABELS);
+const GROUP_ITEMS = new Set([
+  "holeWinner",
+  "medalFront",
+  "medalBack",
+  "match",
+  "sandyPar",
+  "birdie",
+  "eagle",
+  "albatross",
+  "holeOut",
+  "wetPar",
+  "ohYes",
+]);
 
 const formatRoundDate = (value) => {
   if (!value) {
@@ -1341,7 +1365,7 @@ export default function RoundDetailPage() {
                     color="club"
                     onClick={handleSettle}
                     loading={settling}
-                    disabled={!allCardsComplete}
+                    disabled={scorecards.length === 0}
                   >
                     Calcular pagos
                   </Button>
@@ -1671,116 +1695,180 @@ export default function RoundDetailPage() {
               Calcula pagos para ver el resumen final.
             </Text>
           ) : (
-            <Accordion variant="separated">
-              {scorecards.map((card) => {
-                const playerId = card.player?._id?.toString();
-                const value = summary.summary?.[playerId] || 0;
-                const items = (summary.payments || []).filter(
-                  (payment) =>
-                    String(payment.from) === playerId ||
-                    String(payment.to) === playerId
+            (() => {
+              const payments = summary.payments || [];
+              const getPlayerName = (id) =>
+                scorecards.find(
+                  (card) => String(card.player?._id) === String(id)
+                )?.player?.name || "Jugador";
+              const roundBets = round?.configSnapshot?.individualBets || [];
+              const betLabelById = roundBets.reduce((acc, bet) => {
+                const nameA = getPlayerName(bet.playerA);
+                const nameB = getPlayerName(bet.playerB);
+                acc[bet.id] = `Raya individual: ${nameA} vs ${nameB}`;
+                return acc;
+              }, {});
+
+              const groupPayments = payments.filter((payment) =>
+                GROUP_ITEMS.has(payment.item)
+              );
+              const culebraPayments = payments.filter(
+                (payment) => payment.item === "culebra"
+              );
+              const individualPayments = payments.filter(
+                (payment) =>
+                  !GROUP_ITEMS.has(payment.item) && payment.item !== "culebra"
+              );
+              const groupedIndividual = individualPayments.reduce(
+                (acc, payment) => {
+                  const noteKey = payment.note ? `bet:${payment.note}` : null;
+                  const fallbackKey = [String(payment.from), String(payment.to)]
+                    .sort()
+                    .join("-");
+                  const key = noteKey || `pair:${fallbackKey}`;
+                  if (!acc[key]) {
+                    acc[key] = [];
+                  }
+                  acc[key].push(payment);
+                  return acc;
+                },
+                {}
+              );
+              const orderedIndividualKeys = [
+                ...roundBets
+                  .map((bet) => `bet:${bet.id}`)
+                  .filter((key) => key in groupedIndividual),
+                ...Object.keys(groupedIndividual).filter(
+                  (key) =>
+                    !key.startsWith("bet:") &&
+                    !roundBets.find((bet) => `bet:${bet.id}` === key)
+                ),
+              ];
+
+              const renderPlayerBlock = (blockPayments, playerId) => {
+                const wins = blockPayments.filter(
+                  (payment) => String(payment.to) === playerId
                 );
+                const losses = blockPayments.filter(
+                  (payment) => String(payment.from) === playerId
+                );
+                if (wins.length === 0 && losses.length === 0) {
+                  return null;
+                }
                 return (
-                  <Accordion.Item key={card._id} value={card._id}>
-                    <Accordion.Control>
-                      <Group justify="space-between">
-                        <Text fw={600}>{card.player?.name || "Jugador"}</Text>
-                        <Text size="sm" c={value >= 0 ? "club.7" : "clay.7"}>
-                          {value >= 0 ? "+" : "-"}${Math.abs(value)}
-                        </Text>
-                      </Group>
-                    </Accordion.Control>
-                    <Accordion.Panel>
-                      {items.length === 0 ? (
-                        <Text size="sm" c="dusk.6">
-                          Sin movimientos registrados.
-                        </Text>
-                      ) : (
-                        (() => {
-                          const wins = items.filter(
-                            (payment) => String(payment.to) === playerId
-                          );
-                          const losses = items.filter(
-                            (payment) => String(payment.from) === playerId
-                          );
-                          const totalsByItem = wins.reduce((acc, payment) => {
-                            const label = ITEM_LABELS[payment.item] || payment.item;
-                            const holeLabel = payment.hole
-                              ? `· Hoyo ${payment.hole}`
-                              : "";
-                            const key = `${label} ${holeLabel}`;
-                            acc[key] = (acc[key] || 0) + payment.amount;
-                            return acc;
-                          }, {});
-                          const entries = Object.entries(totalsByItem);
-                          return (
-                            <>
-                              <Text
-                                size="sm"
-                                c={value >= 0 ? "club.7" : "clay.7"}
-                                mb="xs"
-                              >
-                                {value >= 0 ? "Total a favor" : "Total en contra"}:
-                                {value >= 0 ? " +" : " -"}${Math.abs(value)}
-                              </Text>
-                              {entries.length > 0 ? (
-                                <>
-                                  {entries.map(([label, amount]) => (
-                                    <Group key={`${card._id}-${label}`} mb="xs">
-                                      <Badge color="club" variant="light">
-                                        Gana
-                                      </Badge>
-                                      <Text size="sm">{label}</Text>
-                                      <Text size="sm" c="club.7">
-                                        +${amount}
-                                      </Text>
-                                    </Group>
-                                  ))}
-                                </>
-                              ) : null}
-                              {losses.length > 0 ? (
-                                <>
-                                  <Text size="sm" c="clay.7" mt="sm" mb="xs">
-                                    Detalle de pagos
-                                  </Text>
-                                  {losses.map((payment, idx) => {
-                                    const rivalId = String(payment.to);
-                                    const rival = scorecards.find(
-                                      (card) => String(card.player?._id) === rivalId
-                                    );
-                                    const label =
-                                      ITEM_LABELS[payment.item] || payment.item;
-                                    return (
-                                      <Group key={`${card._id}-loss-${idx}`} mb="xs">
-                                        <Badge color="clay" variant="light">
-                                          Paga
-                                        </Badge>
-                                        <Text size="sm">
-                                          {label}
-                                          {payment.hole ? ` · Hoyo ${payment.hole}` : ""}
-                                          {rival ? ` · vs ${rival.player?.name}` : ""}
-                                        </Text>
-                                        <Text size="sm" c="clay.7">
-                                          -${payment.amount}
-                                        </Text>
-                                      </Group>
-                                    );
-                                  })}
-                                </>
-                              ) : entries.length === 0 ? (
-                                <Text size="sm" c="dusk.6">
-                                  Sin movimientos registrados.
-                                </Text>
-                              ) : null}
-                            </>
-                          );
-                        })()
-                      )}
-                    </Accordion.Panel>
-                  </Accordion.Item>
+                  <div key={`${playerId}-block`}>
+                    {wins.map((payment, idx) => {
+                      const rivalId = String(payment.from);
+                      const rival = getPlayerName(rivalId);
+                      const label = ITEM_LABELS[payment.item] || payment.item;
+                      return (
+                        <Group key={`${playerId}-win-${idx}`} mb="xs">
+                          <Badge color="club" variant="light">
+                            Gana
+                          </Badge>
+                          <Text size="sm">
+                            {label}
+                            {payment.hole ? ` · Hoyo ${payment.hole}` : ""}
+                            {rival ? ` · vs ${rival}` : ""}
+                          </Text>
+                          <Text size="sm" c="club.7">
+                            +${payment.amount}
+                          </Text>
+                        </Group>
+                      );
+                    })}
+                    {losses.map((payment, idx) => {
+                      const rivalId = String(payment.to);
+                      const rival = getPlayerName(rivalId);
+                      const label = ITEM_LABELS[payment.item] || payment.item;
+                      return (
+                        <Group key={`${playerId}-loss-${idx}`} mb="xs">
+                          <Badge color="clay" variant="light">
+                            Paga
+                          </Badge>
+                          <Text size="sm">
+                            {label}
+                            {payment.hole ? ` · Hoyo ${payment.hole}` : ""}
+                            {rival ? ` · vs ${rival}` : ""}
+                          </Text>
+                          <Text size="sm" c="clay.7">
+                            -${payment.amount}
+                          </Text>
+                        </Group>
+                      );
+                    })}
+                  </div>
                 );
-              })}
-            </Accordion>
+              };
+
+              const renderBlock = (title, blockPayments, blockPlayers) => (
+                <Card key={title} withBorder mb="md">
+                  <Text fw={700} mb="sm">
+                    {title}
+                  </Text>
+                  <Accordion variant="separated">
+                    {blockPlayers.map((playerId) => {
+                      const wins = blockPayments.filter(
+                        (payment) => String(payment.to) === playerId
+                      );
+                      const losses = blockPayments.filter(
+                        (payment) => String(payment.from) === playerId
+                      );
+                      if (wins.length === 0 && losses.length === 0) {
+                        return null;
+                      }
+                      const total =
+                        wins.reduce((sum, payment) => sum + payment.amount, 0) -
+                        losses.reduce((sum, payment) => sum + payment.amount, 0);
+                      return (
+                        <Accordion.Item key={`${title}-${playerId}`} value={`${title}-${playerId}`}>
+                          <Accordion.Control>
+                            <Group justify="space-between">
+                              <Text fw={600}>{getPlayerName(playerId)}</Text>
+                              <Text size="sm" c={total >= 0 ? "club.7" : "clay.7"}>
+                                {total >= 0 ? "+" : "-"}${Math.abs(total)}
+                              </Text>
+                            </Group>
+                          </Accordion.Control>
+                          <Accordion.Panel>
+                            {renderPlayerBlock(blockPayments, playerId)}
+                          </Accordion.Panel>
+                        </Accordion.Item>
+                      );
+                    })}
+                  </Accordion>
+                </Card>
+              );
+
+              const groupPlayers = scorecards.map((card) =>
+                String(card.player?._id)
+              );
+
+              return (
+                <>
+                  {renderBlock("Rayas grupales", groupPayments, groupPlayers)}
+                  {round?.configSnapshot?.culebra?.enabled
+                    ? renderBlock("Culebra", culebraPayments, groupPlayers)
+                    : null}
+                  {orderedIndividualKeys.map((key) => {
+                    const blockPayments = groupedIndividual[key] || [];
+                    const playersInBlock = Array.from(
+                      new Set(
+                        blockPayments.flatMap((payment) => [
+                          String(payment.from),
+                          String(payment.to),
+                        ])
+                      )
+                    );
+                    const title = key.startsWith("bet:")
+                      ? betLabelById[key.replace("bet:", "")] ||
+                        "Raya individual"
+                      : "Raya individual";
+                    return renderBlock(title, blockPayments, playersInBlock);
+                  })}
+                </>
+              );
+            })()
           )}
         </Card>
 

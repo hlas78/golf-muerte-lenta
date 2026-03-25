@@ -20,6 +20,7 @@ export default function SettingsPage() {
     holeOut: 40,
     wetPar: 20,
     ohYes: 30,
+    culebra: 0,
   });
 
   useEffect(() => {
@@ -137,6 +138,11 @@ export default function SettingsPage() {
               label="Oh yes (par 3)"
               value={bets.ohYes}
               onChange={(value) => updateBet("ohYes", value)}
+            />
+            <NumberInput
+              label="Culebra (3-putt)"
+              value={bets.culebra}
+              onChange={(value) => updateBet("culebra", value)}
             />
             <Text size="sm" c="dusk.6">
               Los castigos se registran en la tarjeta, sin pagos en efectivo.

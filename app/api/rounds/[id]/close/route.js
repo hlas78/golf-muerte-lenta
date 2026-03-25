@@ -144,6 +144,15 @@ const ITEM_LABELS = {
   holeOut: "Hole out ",
   wetPar: "Wet par ",
   ohYes: "Oh yes ",
+  culebra: "Culebra ",
+  indFront: "Vuelta 1 (Raya) ",
+  indBack: "Vuelta 2 (Raya) ",
+  indRound: "Ronda 18 (Raya) ",
+  indHole: "Hoyo ganado (Raya) ",
+  indBirdie: "Birdie+ (Raya) ",
+  indSandy: "Sandy (Raya) ",
+  indWet: "Wet (Raya) ",
+  indOhYes: "Oh yes (Raya) ",
 };
 
 function buildSummary(payments) {
@@ -294,8 +303,13 @@ export async function POST(request, { params }) {
       )
     );
 
+    const roundConfigSnapshot = round.configSnapshot;
+    const roundConfig =
+      roundConfigSnapshot && roundConfigSnapshot.bets
+        ? roundConfigSnapshot
+        : { bets: roundConfigSnapshot || config?.bets || {} };
     const calculated = calculatePayments({
-      config: config || { bets: round.configSnapshot },
+      config: roundConfig,
       round,
       scorecards: populatedScorecards,
       holeHandicaps,

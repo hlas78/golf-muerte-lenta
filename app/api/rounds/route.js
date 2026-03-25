@@ -68,6 +68,30 @@ export async function POST(request) {
   const holesCount = Number(payload.holes) || 18;
   const nineType =
     holesCount === 9 ? payload.nineType || "front" : "front";
+  const individualBets = Array.isArray(payload.individualBets)
+    ? payload.individualBets.map((bet) => ({
+        id: bet?.id,
+        playerA: bet?.playerA,
+        playerB: bet?.playerB,
+        amounts: {
+          front: Number(bet?.amounts?.front) || 0,
+          back: Number(bet?.amounts?.back) || 0,
+          round: Number(bet?.amounts?.round) || 0,
+          hole: Number(bet?.amounts?.hole) || 0,
+          birdie: Number(bet?.amounts?.birdie) || 0,
+          sandy: Number(bet?.amounts?.sandy) || 0,
+          wet: Number(bet?.amounts?.wet) || 0,
+          ohYes: Number(bet?.amounts?.ohYes) || 0,
+        },
+      }))
+    : [];
+  const culebraConfig = {
+    enabled: Boolean(payload?.culebra?.enabled),
+    players: Array.isArray(payload?.culebra?.players)
+      ? payload.culebra.players.map(String)
+      : [],
+    amount: Number(payload?.culebra?.amount) || 0,
+  };
   const round = await Round.create({
     course: course?._id,
     courseSnapshot: course,
@@ -79,7 +103,12 @@ export async function POST(request) {
     supervisor: payload.supervisor,
     players: payload.players || [],
     description: payload.description || "",
-    configSnapshot: config.bets,
+    configSnapshot: {
+      system: "group",
+      bets: config.bets,
+      individualBets,
+      culebra: culebraConfig,
+    },
     startedAt,
   });
   console.log('round: ', round)

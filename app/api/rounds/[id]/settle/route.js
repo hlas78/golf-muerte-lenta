@@ -117,8 +117,13 @@ export async function POST(request, { params }) {
     )
   );
 
+  const roundConfigSnapshot = round.configSnapshot;
+  const roundConfig =
+    roundConfigSnapshot && roundConfigSnapshot.bets
+      ? roundConfigSnapshot
+      : { bets: roundConfigSnapshot || config?.bets || {} };
   const payments = calculatePayments({
-    config: config || { bets: round.configSnapshot },
+    config: roundConfig,
     round,
     scorecards,
     holeHandicaps,
