@@ -68,14 +68,14 @@ export async function POST(request) {
   if (existingUser) {
     await sendMessage(
       phone,
-      `¡Hola ${name || user.name} 👋! \n\nYa estás registrado en ☠️ La Muerte Lenta ☠️.\nAquí tienes tu liga de acceso: \n${link}\n\nSi aún estás en revisión, en cuanto te aprueben podrás entrar.`
+      `¡Hola ${name || user.name} 👋! \n\nYa estás registrado en ☠️ La Muerte Rápida ☠️.\nAquí tienes tu liga de acceso: \n${link}\n\nSi aún estás en revisión, en cuanto te aprueben podrás entrar.`
     );
   } else {
     await sendMessage(
       phone,
-      `¡Hola ${name || user.name} 👋! \n\nGracias por solicitar tu acceso a ☠️ La Muerte Lenta ☠️\n\nEn cuanto la solicitud sea aprobada, recibirás tu acceso. Agrega el contacto que te voy a enviar a continuación para facilitar el proceso de alta`
+      `¡Hola ${name || user.name} 👋! \n\nGracias por solicitar tu acceso a ☠️ La Muerte Rápida ☠️\n\nEn cuanto la solicitud sea aprobada, recibirás tu acceso. Agrega el contacto que te voy a enviar a continuación para facilitar el proceso de alta`
     );
-    sendMessage(phone, 'BEGIN:VCARD\nVERSION:3.0\nN:Avisos;Muerte Lenta;;;\nFN:Avisos Muerte Lenta\nTEL;type=CELL;type=VOICE;waid=5215530967255:+525530967255\nEND:VCARD');
+    sendMessage(phone, 'BEGIN:VCARD\nVERSION:3.0\nN:Avisos;Muerte Rápida;;;\nFN:Avisos Muerte Rápida\nTEL;type=CELL;type=VOICE;waid=5215530967255:+525530967255\nEND:VCARD');
 
   }
   

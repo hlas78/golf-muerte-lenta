@@ -19,8 +19,8 @@ const bodyFont = Roboto_Condensed({
 });
 
 export const metadata = {
-  title: "Golf Muerte Lenta",
-  description: "Registro de jugadas y apuestas entre amigos de la ML",
+  title: "Golf Muerte Rápida",
+  description: "Registro de jugadas y apuestas entre amigos de la MR",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -31,7 +31,7 @@ export const metadata = {
     ],
   },
   appleWebApp: {
-    title: "Golf Muerte Lenta",
+    title: "Golf Muerte Rápida",
     statusBarStyle: "default",
   },
 };

@@ -108,6 +108,7 @@ export async function POST(request) {
       bets: config.bets,
       individualBets,
       culebra: culebraConfig,
+      notificationsMuted: true,
     },
     startedAt,
   });

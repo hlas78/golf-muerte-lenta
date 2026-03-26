@@ -435,7 +435,7 @@ export async function POST(request, { params }) {
   const participants = await User.find({
     _id: { $in: Array.from(new Set(round.players || [])) },
   });
-  const messageTitle = "⛳*La muerte lenta*⛳";
+  const messageTitle = "⛳*La muerte rápida*⛳";
   const randomMessage = `☠️ ${SARCASTIC_MESSAGES[Math.floor(Math.random() * SARCASTIC_MESSAGES.length)]} ☠️`;
   const getNetForItem = (playerId, item) => {
     const netTotals = netTotalsByPlayer[playerId];

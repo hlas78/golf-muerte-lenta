@@ -116,7 +116,7 @@ export default function Home() {
           centered
         >
           <Text size="sm" c="dusk.6" mb="sm">
-            Selecciona un archivo exportado de Golf Muerte Lenta.
+            Selecciona un archivo exportado de Golf Muerte Rápida.
           </Text>
           <input
             type="file"
@@ -142,7 +142,7 @@ export default function Home() {
         </Modal>
         {/* <section className="gml-hero">
           <div className="gml-badge">Golf</div>
-          <h1>Muerte Lenta</h1>
+          <h1>Muerte Rápida</h1>
           <p>¡A jugar!
           </p>
           {<Group>

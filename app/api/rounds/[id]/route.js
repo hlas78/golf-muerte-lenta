@@ -44,3 +44,35 @@ export async function DELETE(request, { params }) {
 
   return NextResponse.json({ ok: true });
 }
+
+export async function PATCH(request, { params }) {
+  await connectDb();
+  const cookieStore = await cookies();
+  const token = cookieStore.get("gml_token")?.value;
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const payload = verifyToken(token);
+  const user = await User.findById(payload.id);
+  const canEdit = user?.role === "admin" || user?.role === "supervisor";
+  if (!canEdit) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const round = await Round.findById(id);
+  if (!round) {
+    return NextResponse.json({ error: "Round not found" }, { status: 404 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  if (body?.configSnapshot) {
+    round.configSnapshot = body.configSnapshot;
+  }
+  await round.save();
+
+  const updated = await Round.findById(id)
+    .populate("players", "-passwordHash")
+    .populate("supervisor", "-passwordHash");
+  return NextResponse.json(updated);
+}

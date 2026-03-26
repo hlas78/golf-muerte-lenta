@@ -10,6 +10,8 @@ import {
   Card,
   Group,
   Modal,
+  NumberInput,
+  Switch,
   Select,
   Table,
   Text,
@@ -102,6 +104,16 @@ export default function RoundDetailPage() {
   const [allAccepted, setAllAccepted] = useState(false);
   const [closing, setClosing] = useState(false);
   const [optimizedTransfers, setOptimizedTransfers] = useState([]);
+  const [betsOpen, setBetsOpen] = useState(false);
+  const [betEditOpen, setBetEditOpen] = useState(false);
+  const [betsDraft, setBetsDraft] = useState({});
+  const [individualBetsDraft, setIndividualBetsDraft] = useState([]);
+  const [betDraft, setBetDraft] = useState(null);
+  const [culebraDraft, setCulebraDraft] = useState({
+    enabled: false,
+    players: [],
+    amount: 0,
+  });
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [uploadingCardId, setUploadingCardId] = useState(null);
@@ -197,6 +209,189 @@ export default function RoundDetailPage() {
         setAllAccepted(Boolean(data.allAccepted));
       })
       .catch(() => setScorecards([]));
+  };
+
+  const defaultBets = {
+    holeWinner: 0,
+    medal: 0,
+    match: 0,
+    sandyPar: 0,
+    birdie: 0,
+    eagle: 0,
+    albatross: 0,
+    holeOut: 0,
+    wetPar: 0,
+    ohYes: 0,
+    culebra: 0,
+  };
+
+  const roundPlayers = useMemo(() => {
+    if (Array.isArray(round?.players) && round.players.length > 0) {
+      return round.players;
+    }
+    return scorecards.map((card) => card.player).filter(Boolean);
+  }, [round?.players, scorecards]);
+
+  const playerOptions = roundPlayers.map((player) => ({
+    value: String(player._id),
+    label: player.name,
+    name: player.name,
+  }));
+
+  const openBetsModal = () => {
+    const snapshot = round?.configSnapshot;
+    const baseBets =
+      snapshot && snapshot.bets ? snapshot.bets : snapshot || {};
+    setBetsDraft({ ...defaultBets, ...baseBets });
+    setIndividualBetsDraft(
+      Array.isArray(snapshot?.individualBets) ? snapshot.individualBets : []
+    );
+    setCulebraDraft({
+      enabled: Boolean(snapshot?.culebra?.enabled),
+      players: Array.isArray(snapshot?.culebra?.players)
+        ? snapshot.culebra.players
+        : [],
+      amount:
+        Number(snapshot?.culebra?.amount) ||
+        Number(baseBets?.culebra) ||
+        0,
+    });
+    setBetsOpen(true);
+  };
+
+  const createEmptyBet = () => ({
+    id: `bet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    playerA: "",
+    playerB: "",
+    amounts: {
+      front: 0,
+      back: 0,
+      round: 0,
+      hole: 0,
+      birdie: 0,
+      sandy: 0,
+      wet: 0,
+      ohYes: 0,
+    },
+  });
+
+  const openNewBet = () => {
+    setBetDraft(createEmptyBet());
+    setBetEditOpen(true);
+  };
+
+  const editBet = (bet) => {
+    setBetDraft({ ...bet, amounts: { ...bet.amounts } });
+    setBetEditOpen(true);
+  };
+
+  const saveBet = () => {
+    if (!betDraft?.playerA || !betDraft?.playerB) {
+      notifications.show({
+        title: "Faltan jugadores",
+        message: "Selecciona ambos jugadores.",
+        color: "clay",
+      });
+      return;
+    }
+    if (betDraft.playerA === betDraft.playerB) {
+      notifications.show({
+        title: "Jugadores invalidos",
+        message: "Selecciona jugadores distintos.",
+        color: "clay",
+      });
+      return;
+    }
+    setIndividualBetsDraft((prev) => {
+      const exists = prev.find((bet) => bet.id === betDraft.id);
+      if (exists) {
+        return prev.map((bet) => (bet.id === betDraft.id ? betDraft : bet));
+      }
+      return [...prev, betDraft];
+    });
+    setBetEditOpen(false);
+    setBetDraft(null);
+  };
+
+  const removeBet = (betId) => {
+    setIndividualBetsDraft((prev) => prev.filter((bet) => bet.id !== betId));
+  };
+
+  const saveBetsConfig = async () => {
+    if (!params?.id) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/rounds/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          configSnapshot: {
+            system: "group",
+            bets: betsDraft,
+            individualBets: individualBetsDraft,
+            culebra: culebraDraft,
+            notificationsMuted:
+              round?.configSnapshot?.notificationsMuted !== false,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo guardar.");
+      }
+      const updated = await res.json();
+      setRound(updated);
+      await handleSettle();
+      setBetsOpen(false);
+      notifications.show({
+        title: "Apuestas actualizadas",
+        message: "Se aplicaron los cambios.",
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo guardar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    }
+  };
+
+  const handleToggleNotifications = async (checked) => {
+    if (!params?.id) {
+      return;
+    }
+    try {
+      const currentSnapshot = round?.configSnapshot || {};
+      const res = await fetch(`/api/rounds/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          configSnapshot: {
+            ...currentSnapshot,
+            notificationsMuted: !checked,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo guardar.");
+      }
+      const updated = await res.json();
+      setRound(updated);
+      notifications.show({
+        title: "Notificaciones actualizadas",
+        message: checked ? "Se activaron." : "Se silenciaron.",
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo guardar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    }
   };
 
   useEffect(() => {
@@ -1362,6 +1557,15 @@ export default function RoundDetailPage() {
                 {canApprove ? (
                   <Button
                     size="xs"
+                    variant="light"
+                    onClick={openBetsModal}
+                  >
+                    Editar apuestas
+                  </Button>
+                ) : null}
+                {canApprove ? (
+                  <Button
+                    size="xs"
                     color="club"
                     onClick={handleSettle}
                     loading={settling}
@@ -1420,6 +1624,20 @@ export default function RoundDetailPage() {
                   >
                     Eliminar
                   </Button>
+                ) : null}
+                {canApprove ? (
+                  <Group gap="xs">
+                    <Text size="xs" c="dusk.6">
+                      Notificaciones
+                    </Text>
+                    <Switch
+                      size="sm"
+                      checked={round?.configSnapshot?.notificationsMuted === false}
+                      onChange={(event) =>
+                        handleToggleNotifications(event.currentTarget.checked)
+                      }
+                    />
+                  </Group>
                 ) : null}
               </Group>
             )}
@@ -1902,6 +2120,381 @@ export default function RoundDetailPage() {
           )}
         </Card> */}
       </AppShell>
+      <Modal
+        opened={betsOpen}
+        onClose={() => setBetsOpen(false)}
+        title="Editar apuestas"
+        size="lg"
+        centered
+      >
+        <Text fw={600} mb="sm">
+          Rayas grupales
+        </Text>
+        <Group grow>
+          <NumberInput
+            label="Hoyo ganado"
+            value={betsDraft.holeWinner}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, holeWinner: Number(value) || 0 }))
+            }
+          />
+          <NumberInput
+            label="Medal"
+            value={betsDraft.medal}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, medal: Number(value) || 0 }))
+            }
+          />
+          <NumberInput
+            label="Match"
+            value={betsDraft.match}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, match: Number(value) || 0 }))
+            }
+          />
+        </Group>
+        <Group grow mt="sm">
+          <NumberInput
+            label="Birdie"
+            value={betsDraft.birdie}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, birdie: Number(value) || 0 }))
+            }
+          />
+          <NumberInput
+            label="Aguila"
+            value={betsDraft.eagle}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, eagle: Number(value) || 0 }))
+            }
+          />
+          <NumberInput
+            label="Albatross"
+            value={betsDraft.albatross}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, albatross: Number(value) || 0 }))
+            }
+          />
+        </Group>
+        <Group grow mt="sm">
+          <NumberInput
+            label="Hole out"
+            value={betsDraft.holeOut}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, holeOut: Number(value) || 0 }))
+            }
+          />
+          <NumberInput
+            label="Sandy"
+            value={betsDraft.sandyPar}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, sandyPar: Number(value) || 0 }))
+            }
+          />
+          <NumberInput
+            label="Wet"
+            value={betsDraft.wetPar}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, wetPar: Number(value) || 0 }))
+            }
+          />
+          <NumberInput
+            label="Oh yes"
+            value={betsDraft.ohYes}
+            onChange={(value) =>
+              setBetsDraft((prev) => ({ ...prev, ohYes: Number(value) || 0 }))
+            }
+          />
+        </Group>
+
+        <Text fw={600} mt="lg" mb="sm">
+          Rayas individuales
+        </Text>
+        <Group justify="space-between" mb="sm">
+          <Button variant="light" onClick={openNewBet}>
+            Agregar raya individual
+          </Button>
+          <Text size="xs" c="dusk.6">
+            {individualBetsDraft.length} configuradas
+          </Text>
+        </Group>
+        {individualBetsDraft.length > 0 ? (
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Jugadores</Table.Th>
+                <Table.Th>V1</Table.Th>
+                <Table.Th>V2</Table.Th>
+                <Table.Th>R18</Table.Th>
+                <Table.Th>Hoyo</Table.Th>
+                <Table.Th>Birdie+</Table.Th>
+                <Table.Th>Sandy</Table.Th>
+                <Table.Th>Wet</Table.Th>
+                <Table.Th>Oh yes</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {individualBetsDraft.map((bet) => {
+                const playerA = playerOptions.find(
+                  (option) => option.value === bet.playerA
+                );
+                const playerB = playerOptions.find(
+                  (option) => option.value === bet.playerB
+                );
+                return (
+                  <Table.Tr key={bet.id}>
+                    <Table.Td>
+                      {playerA?.name || "Jugador"} vs {playerB?.name || "Jugador"}
+                    </Table.Td>
+                    <Table.Td>{bet.amounts.front}</Table.Td>
+                    <Table.Td>{bet.amounts.back}</Table.Td>
+                    <Table.Td>{bet.amounts.round}</Table.Td>
+                    <Table.Td>{bet.amounts.hole}</Table.Td>
+                    <Table.Td>{bet.amounts.birdie}</Table.Td>
+                    <Table.Td>{bet.amounts.sandy}</Table.Td>
+                    <Table.Td>{bet.amounts.wet}</Table.Td>
+                    <Table.Td>{bet.amounts.ohYes}</Table.Td>
+                    <Table.Td>
+                      <Group gap="xs">
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={() => editBet(bet)}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="light"
+                          color="clay"
+                          onClick={() => removeBet(bet.id)}
+                        >
+                          Quitar
+                        </Button>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        ) : (
+          <Text size="xs" c="dusk.6">
+            No hay rayas individuales configuradas.
+          </Text>
+        )}
+
+        <Text fw={600} mt="lg" mb="sm">
+          Culebra
+        </Text>
+        <Group align="center" mb="sm">
+          <Button
+            variant={culebraDraft.enabled ? "filled" : "light"}
+            color={culebraDraft.enabled ? "club" : "dusk"}
+            onClick={() =>
+              setCulebraDraft((prev) => ({ ...prev, enabled: !prev.enabled }))
+            }
+            disabled={roundPlayers.length === 0}
+          >
+            {culebraDraft.enabled ? "Activada" : "Activar culebra"}
+          </Button>
+          <NumberInput
+            label="Monto"
+            value={culebraDraft.amount}
+            onChange={(value) =>
+              setCulebraDraft((prev) => ({
+                ...prev,
+                amount: Number(value) || 0,
+              }))
+            }
+          />
+          <Button
+            variant="light"
+            size="xs"
+            onClick={() =>
+              setCulebraDraft((prev) => ({
+                ...prev,
+                players:
+                  prev.players.length === roundPlayers.length
+                    ? []
+                    : roundPlayers.map((player) => String(player._id)),
+              }))
+            }
+            disabled={!culebraDraft.enabled}
+          >
+            {culebraDraft.players.length === roundPlayers.length
+              ? "Limpiar todos"
+              : "Seleccionar todos"}
+          </Button>
+        </Group>
+        {culebraDraft.enabled ? (
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Jugador</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {playerOptions.map((player) => {
+                const selected = culebraDraft.players.includes(player.value);
+                return (
+                  <Table.Tr key={`culebra-${player.value}`}>
+                    <Table.Td>{player.name}</Table.Td>
+                    <Table.Td>
+                      <Button
+                        size="xs"
+                        variant={selected ? "filled" : "light"}
+                        color={selected ? "club" : "dusk"}
+                        onClick={() =>
+                          setCulebraDraft((prev) => ({
+                            ...prev,
+                            players: prev.players.includes(player.value)
+                              ? prev.players.filter((id) => id !== player.value)
+                              : [...prev.players, player.value],
+                          }))
+                        }
+                      >
+                        {selected ? "Quitar" : "Agregar"}
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        ) : (
+          <Text size="xs" c="dusk.6">
+            Activa la culebra para seleccionar participantes.
+          </Text>
+        )}
+
+        <Group justify="flex-end" mt="md">
+          <Button variant="light" onClick={() => setBetsOpen(false)}>
+            Cancelar
+          </Button>
+          <Button color="club" onClick={saveBetsConfig}>
+            Guardar
+          </Button>
+        </Group>
+      </Modal>
+
+      <Modal
+        opened={betEditOpen}
+        onClose={() => setBetEditOpen(false)}
+        title="Raya individual"
+        centered
+      >
+        <Select
+          label="Jugador A"
+          data={playerOptions}
+          value={betDraft?.playerA || ""}
+          onChange={(value) =>
+            setBetDraft((prev) => ({ ...prev, playerA: value || "" }))
+          }
+        />
+        <Select
+          label="Jugador B"
+          data={playerOptions}
+          value={betDraft?.playerB || ""}
+          onChange={(value) =>
+            setBetDraft((prev) => ({ ...prev, playerB: value || "" }))
+          }
+        />
+        <Group grow mt="md">
+          <NumberInput
+            label="Vuelta 1"
+            value={betDraft?.amounts?.front ?? 0}
+            onChange={(value) =>
+              setBetDraft((prev) => ({
+                ...prev,
+                amounts: { ...prev.amounts, front: Number(value) || 0 },
+              }))
+            }
+          />
+          <NumberInput
+            label="Vuelta 2"
+            value={betDraft?.amounts?.back ?? 0}
+            onChange={(value) =>
+              setBetDraft((prev) => ({
+                ...prev,
+                amounts: { ...prev.amounts, back: Number(value) || 0 },
+              }))
+            }
+          />
+          <NumberInput
+            label="Ronda 18"
+            value={betDraft?.amounts?.round ?? 0}
+            onChange={(value) =>
+              setBetDraft((prev) => ({
+                ...prev,
+                amounts: { ...prev.amounts, round: Number(value) || 0 },
+              }))
+            }
+          />
+          <NumberInput
+            label="Hoyo ganado"
+            value={betDraft?.amounts?.hole ?? 0}
+            onChange={(value) =>
+              setBetDraft((prev) => ({
+                ...prev,
+                amounts: { ...prev.amounts, hole: Number(value) || 0 },
+              }))
+            }
+          />
+        </Group>
+        <Group grow mt="md">
+          <NumberInput
+            label="Birdie+"
+            value={betDraft?.amounts?.birdie ?? 0}
+            onChange={(value) =>
+              setBetDraft((prev) => ({
+                ...prev,
+                amounts: { ...prev.amounts, birdie: Number(value) || 0 },
+              }))
+            }
+          />
+          <NumberInput
+            label="Sandy"
+            value={betDraft?.amounts?.sandy ?? 0}
+            onChange={(value) =>
+              setBetDraft((prev) => ({
+                ...prev,
+                amounts: { ...prev.amounts, sandy: Number(value) || 0 },
+              }))
+            }
+          />
+          <NumberInput
+            label="Wet"
+            value={betDraft?.amounts?.wet ?? 0}
+            onChange={(value) =>
+              setBetDraft((prev) => ({
+                ...prev,
+                amounts: { ...prev.amounts, wet: Number(value) || 0 },
+              }))
+            }
+          />
+          <NumberInput
+            label="Oh yes"
+            value={betDraft?.amounts?.ohYes ?? 0}
+            onChange={(value) =>
+              setBetDraft((prev) => ({
+                ...prev,
+                amounts: { ...prev.amounts, ohYes: Number(value) || 0 },
+              }))
+            }
+          />
+        </Group>
+        <Group justify="flex-end" mt="md">
+          <Button variant="light" onClick={() => setBetEditOpen(false)}>
+            Cancelar
+          </Button>
+          <Button color="club" onClick={saveBet}>
+            Guardar
+          </Button>
+        </Group>
+      </Modal>
       <Modal
         opened={confirmOpen}
         onClose={() => setConfirmOpen(false)}

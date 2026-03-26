@@ -168,6 +168,9 @@ export async function POST(request, { params }) {
             );
             const loser = card.player;
             if (loser?.phone) {
+              if (round?.configSnapshot?.notificationsMuted !== false) {
+                return;
+              }
               const template =
                 OH_YES_LOST_MESSAGES[
                   Math.floor(Math.random() * OH_YES_LOST_MESSAGES.length)
@@ -242,6 +245,9 @@ export async function POST(request, { params }) {
   });
 
   if (newEvents.length > 0) {
+    if (round?.configSnapshot?.notificationsMuted !== false) {
+      return NextResponse.json({ id: scorecard._id });
+    }
     const itemLabels = {
       birdie: "Birdie",
       eagle: "Aguila",
@@ -294,7 +300,7 @@ export async function POST(request, { params }) {
           //   )
           // );
           // Grupo Muerte Lenta
-          // sendMessage('120363405357623444@g.us', message);
+          sendMessage('120363405357623444@g.us', message);
           // sendMessage('120363424386158848@g.us', message);
         } finally {
           pendingWinNotifications.delete(key);
@@ -350,6 +356,9 @@ export async function POST(request, { params }) {
   });
 
   if (newPenalties.length > 0) {
+    if (round?.configSnapshot?.notificationsMuted !== false) {
+      return NextResponse.json({ id: scorecard._id });
+    }
     const penaltyLabels = {
       pinkies: "Pinkies",
       cuatriputt: "Cuatriputt",
@@ -405,7 +414,7 @@ export async function POST(request, { params }) {
           //   )
           // );
           // Grupo Muerte Lenta
-          // sendMessage('120363405357623444@g.us', message);
+          sendMessage('120363405357623444@g.us', message);
           // sendMessage('120363424386158848@g.us', message);
           
         } finally {
