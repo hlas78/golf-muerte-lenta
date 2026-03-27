@@ -74,7 +74,7 @@ export default function AppShell({
           <LogoMark size={44} />
           <div>
             <Text tt="uppercase" size="xs" c="dusk.6" fw={600}>
-              Golf Muerte Lenta
+              Golf Muerte Rápida
             </Text>
             <Text fw={700} size="lg">
               {showGreetingAsTitle && userName ? `Hola, ${userName}` : title}

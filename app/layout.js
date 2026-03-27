@@ -23,9 +23,8 @@ export const metadata = {
   description: "Registro de jugadas y apuestas entre amigos de la MR",
   manifest: "/manifest.json",
   icons: {
-    icon: [
-      { url: "/logo_180.png", sizes: "180x180", type: "image/png" },
-    ],
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
     apple: [
       { url: "/logo_180.png", sizes: "180x180", type: "image/png" },
     ],
