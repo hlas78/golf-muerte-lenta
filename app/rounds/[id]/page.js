@@ -211,6 +211,16 @@ export default function RoundDetailPage() {
       .catch(() => setScorecards([]));
   };
 
+  const sortedScorecards = useMemo(
+    () =>
+      [...scorecards].sort((a, b) =>
+        (a.player?.name || "").localeCompare(b.player?.name || "", "es", {
+          sensitivity: "base",
+        })
+      ),
+    [scorecards]
+  );
+
   const defaultBets = {
     holeWinner: 0,
     medal: 0,
@@ -1703,7 +1713,7 @@ export default function RoundDetailPage() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {scorecards.length === 0 ? (
+                {sortedScorecards.length === 0 ? (
                   <Table.Tr>
                     <Table.Td colSpan={holes.length + 6 + (canApprove ? 1 : 0)}>
                       <Text size="sm" c="dusk.6">
@@ -1712,7 +1722,7 @@ export default function RoundDetailPage() {
                     </Table.Td>
                   </Table.Tr>
                 ) : (
-                  scorecards.map((card) => {
+                  sortedScorecards.map((card) => {
                     const playerId = card.player?._id?.toString();
                     const strokesMap = playerId
                       ? advantageStrokesByPlayer[playerId] || {}
