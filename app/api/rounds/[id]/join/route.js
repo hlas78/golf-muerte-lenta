@@ -133,7 +133,16 @@ export async function POST(request, { params }) {
         })),
       });
     }
-    await sendMessage(user.phone, message);
+    const now = new Date();
+    if (!round.startedAt || round.startedAt <= now) {
+      await sendMessage(user.phone, message);
+      round.welcomeSentAt = round.welcomeSentAt || new Date();
+      round.welcomeSentPlayers = round.welcomeSentPlayers || [];
+      if (!round.welcomeSentPlayers.find((id) => String(id) === String(user._id))) {
+        round.welcomeSentPlayers.push(user._id);
+        await round.save();
+      }
+    }
   }
   return NextResponse.json({ ok: true });
 }

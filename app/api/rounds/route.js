@@ -187,25 +187,31 @@ export async function POST(request) {
       round.courseSnapshot?.clubName ||
       round.courseSnapshot?.courseName ||
       "el campo";
-    await Promise.allSettled(
-      participants.map(async (player) => {
-        if (!player.magicToken) {
-          player.magicToken = crypto.randomBytes(24).toString("hex");
-          player.magicTokenCreatedAt = new Date();
-          await player.save();
-        }
-        const recordLink = buildRecordLink(round._id, player.magicToken);
-        const message = buildWelcomeMessage({
-          campo,
-          creatorName: user?.name || "sin nombre",
-          description: round.description || "",
-          recordLink,
-          startedAt: round.startedAt,
-        });
-        console.log(`mensaje de bienvenida creado para ${player.name}`)
-        return sendMessage(player.phone, message);
-      })
-    );
+    const now = new Date();
+    if (round.startedAt && round.startedAt <= now) {
+      await Promise.allSettled(
+        participants.map(async (player) => {
+          if (!player.magicToken) {
+            player.magicToken = crypto.randomBytes(24).toString("hex");
+            player.magicTokenCreatedAt = new Date();
+            await player.save();
+          }
+          const recordLink = buildRecordLink(round._id, player.magicToken);
+          const message = buildWelcomeMessage({
+            campo,
+            creatorName: user?.name || "sin nombre",
+            description: round.description || "",
+            recordLink,
+            startedAt: round.startedAt,
+          });
+          console.log(`mensaje de bienvenida creado para ${player.name}`);
+          return sendMessage(player.phone, message);
+        })
+      );
+      round.welcomeSentAt = new Date();
+      round.welcomeSentPlayers = playerIds;
+      await round.save();
+    }
   }
 
   return NextResponse.json({ id: round._id });
