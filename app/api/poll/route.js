@@ -36,7 +36,7 @@ export async function GET() {
   const data = await res.json();
 
   const users = await User.find({ status: { $ne: "baja" } })
-    .select("name phone")
+    .select("name phone handicap")
     .lean();
   const usersByPhone = users.reduce((acc, user) => {
     const phone = normalizePhone(user.phone);
@@ -98,6 +98,7 @@ export async function GET() {
           _id: user._id,
           name: user.name,
           phone: user.phone,
+          handicap: user.handicap ?? 0,
           votedAt: voteMap.get(phone) || 0,
         };
       })

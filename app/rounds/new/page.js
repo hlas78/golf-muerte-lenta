@@ -557,22 +557,39 @@ export default function NewRoundPage() {
     const avgHandicap = totalPlayers
       ? allIds.reduce((sum, id) => sum + getHandicap(id), 0) / groupCount
       : 0;
+    const variance = (totals) => {
+      if (totals.length === 0) return 0;
+      const avg =
+        totals.reduce((sum, value) => sum + value, 0) / totals.length;
+      return (
+        totals.reduce((sum, value) => sum + (value - avg) ** 2, 0) /
+        totals.length
+      );
+    };
+    const scoreAdd = (groupIndex, clusterHandicap) => {
+      const totals = groups.map((group, idx) =>
+        idx === groupIndex ? group.handicap + clusterHandicap : group.handicap
+      );
+      const varScore = variance(totals);
+      const maxMin = Math.max(...totals) - Math.min(...totals);
+      const diffScore = Math.abs(totals[groupIndex] - avgHandicap);
+      return maxMin * 0.45 + varScore * 0.35 + diffScore * 0.2;
+    };
 
-    const unassignedClusters = clusters.filter((cluster) =>
-      cluster.some((id) => !existingGroups[String(id)])
-    );
+    const unassignedClusters = clusters
+      .filter((cluster) => cluster.some((id) => !existingGroups[String(id)]))
+      .map((cluster) => ({
+        ids: cluster,
+        handicap: cluster.reduce((sum, id) => sum + getHandicap(id), 0),
+        carts: cluster.reduce((sum, id) => sum + (hasCart(id) ? 1 : 0), 0),
+      }))
+      .sort((a, b) => b.handicap - a.handicap);
 
     unassignedClusters.forEach((cluster) => {
-      const clusterSize = cluster.length;
-      const clusterHandicap = cluster.reduce(
-        (sum, id) => sum + getHandicap(id),
-        0
-      );
-      const clusterCarts = cluster.reduce(
-        (sum, id) => sum + (hasCart(id) ? 1 : 0),
-        0
-      );
-      const preferredGroup = cluster
+      const clusterSize = cluster.ids.length;
+      const clusterHandicap = cluster.handicap;
+      const clusterCarts = cluster.carts;
+      const preferredGroup = cluster.ids
         .map((id) => existingGroups[String(id)])
         .find(Boolean);
 
@@ -581,7 +598,7 @@ export default function NewRoundPage() {
         .filter(
           ({ group }) =>
             group.members.length + clusterSize <= maxSize &&
-            !hasEnemyConflict(group, cluster)
+            !hasEnemyConflict(group, cluster.ids)
         );
 
       if (candidates.length === 0) {
@@ -600,8 +617,8 @@ export default function NewRoundPage() {
           ({ idx }) => idx === preferredIndex
         );
         if (preferred) {
-          cluster.forEach((id) => addToGroup(preferred.group, id));
-          cluster.forEach((id) => {
+          cluster.ids.forEach((id) => addToGroup(preferred.group, id));
+          cluster.ids.forEach((id) => {
             if (!existingGroups[String(id)]) {
               existingGroups[String(id)] = Number(
                 String(preferred.group.id).replace(/^G/i, "")
@@ -617,20 +634,19 @@ export default function NewRoundPage() {
       }
 
       candidates.sort((a, b) => {
-        const nextA = a.group.handicap + clusterHandicap;
-        const nextB = b.group.handicap + clusterHandicap;
         const scoreA =
-          Math.abs(nextA - avgHandicap) +
+          scoreAdd(a.idx, clusterHandicap) +
           (a.group.carts < 2 && clusterCarts === 0 ? 100 : 0);
         const scoreB =
-          Math.abs(nextB - avgHandicap) +
+          scoreAdd(b.idx, clusterHandicap) +
           (b.group.carts < 2 && clusterCarts === 0 ? 100 : 0);
         return scoreA - scoreB;
       });
+      const targetIndex = candidates[0].idx;
 
-      const target = candidates[0].group;
-      cluster.forEach((id) => addToGroup(target, id));
-      cluster.forEach((id) => {
+      const target = groups[targetIndex];
+      cluster.ids.forEach((id) => addToGroup(target, id));
+      cluster.ids.forEach((id) => {
         if (!existingGroups[String(id)]) {
           existingGroups[String(id)] = Number(
             String(target.id).replace(/^G/i, "")
@@ -691,6 +707,135 @@ export default function NewRoundPage() {
       });
     }
 
+    const clusterSizeByPlayer = {};
+    clusters.forEach((cluster) => {
+      cluster.forEach((id) => {
+        clusterSizeByPlayer[id] = cluster.length;
+      });
+    });
+
+    const scoreGroups = () => {
+      const totals = groups.map((group) => group.handicap);
+      if (totals.length === 0) return 0;
+      const avg =
+        totals.reduce((sum, value) => sum + value, 0) / totals.length;
+      const varScore =
+        totals.reduce((sum, value) => sum + (value - avg) ** 2, 0) /
+        totals.length;
+      const maxMin = Math.max(...totals) - Math.min(...totals);
+      return varScore + maxMin * 0.35;
+    };
+
+    const hasEnemyConflictWith = (members, playerId) =>
+      members.some((member) =>
+        enemySet.has([member, playerId].sort().join("-"))
+      );
+
+    let swapIterations = 0;
+    let improved = true;
+    while (improved && swapIterations < 30) {
+      swapIterations += 1;
+      improved = false;
+      const currentScore = scoreGroups();
+      let bestDelta = 0;
+      let bestSwap = null;
+
+      for (let i = 0; i < groups.length; i += 1) {
+        for (let j = i + 1; j < groups.length; j += 1) {
+          const groupA = groups[i];
+          const groupB = groups[j];
+          for (const playerA of groupA.members) {
+            if (clusterSizeByPlayer[playerA] > 1) continue;
+            for (const playerB of groupB.members) {
+              if (clusterSizeByPlayer[playerB] > 1) continue;
+
+              const nextMembersA = groupA.members.filter(
+                (id) => id !== playerA
+              );
+              const nextMembersB = groupB.members.filter(
+                (id) => id !== playerB
+              );
+              if (
+                hasEnemyConflictWith(nextMembersA, playerB) ||
+                hasEnemyConflictWith(nextMembersB, playerA)
+              ) {
+                continue;
+              }
+
+              const nextTotals = groups.map((group, idx) => {
+                if (idx === i) {
+                  return (
+                    group.handicap -
+                    getHandicap(playerA) +
+                    getHandicap(playerB)
+                  );
+                }
+                if (idx === j) {
+                  return (
+                    group.handicap -
+                    getHandicap(playerB) +
+                    getHandicap(playerA)
+                  );
+                }
+                return group.handicap;
+              });
+              const avg =
+                nextTotals.reduce((sum, value) => sum + value, 0) /
+                nextTotals.length;
+              const varScore =
+                nextTotals.reduce(
+                  (sum, value) => sum + (value - avg) ** 2,
+                  0
+                ) / nextTotals.length;
+              const maxMin =
+                Math.max(...nextTotals) - Math.min(...nextTotals);
+              const nextScore = varScore + maxMin * 0.35;
+              const delta = currentScore - nextScore;
+
+              if (delta > bestDelta) {
+                bestDelta = delta;
+                bestSwap = { i, j, playerA, playerB };
+              }
+            }
+          }
+        }
+      }
+
+      if (bestSwap) {
+        improved = true;
+        const groupA = groups[bestSwap.i];
+        const groupB = groups[bestSwap.j];
+        groupA.members = groupA.members.map((id) =>
+          id === bestSwap.playerA ? bestSwap.playerB : id
+        );
+        groupB.members = groupB.members.map((id) =>
+          id === bestSwap.playerB ? bestSwap.playerA : id
+        );
+        groupA.handicap =
+          groupA.handicap -
+          getHandicap(bestSwap.playerA) +
+          getHandicap(bestSwap.playerB);
+        groupB.handicap =
+          groupB.handicap -
+          getHandicap(bestSwap.playerB) +
+          getHandicap(bestSwap.playerA);
+        groupA.carts =
+          groupA.carts -
+          (hasCart(bestSwap.playerA) ? 1 : 0) +
+          (hasCart(bestSwap.playerB) ? 1 : 0);
+        groupB.carts =
+          groupB.carts -
+          (hasCart(bestSwap.playerB) ? 1 : 0) +
+          (hasCart(bestSwap.playerA) ? 1 : 0);
+        existingGroups[String(bestSwap.playerA)] = Number(
+          String(groupB.id).replace(/^G/i, "")
+        );
+        existingGroups[String(bestSwap.playerB)] = Number(
+          String(groupA.id).replace(/^G/i, "")
+        );
+      }
+    }
+
     const groupHandicaps = groups
       .filter((group) => group.members.length > 0)
       .map((group) => group.handicap);
@@ -731,11 +876,16 @@ export default function NewRoundPage() {
   };
 
   const addPlayersFromOption = (optionName) => {
-    const playersToAdd =
-      pollOptions.find((option) => option.name === optionName)?.players || [];
+    const playersToAdd = [
+      ...(pollOptions.find((option) => option.name === optionName)?.players ||
+        []),
+    ];
     if (playersToAdd.length === 0) {
       return;
     }
+    playersToAdd.sort(
+      (a, b) => Number(a.handicap || 0) - Number(b.handicap || 0)
+    );
     const newIds = playersToAdd.map((player) => String(player._id));
     setSelectedPlayers((prev) => {
       const set = new Set(prev);
