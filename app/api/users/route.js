@@ -4,6 +4,11 @@ import connectDb from "@/lib/db";
 import User from "@/lib/models/User";
 import { hashPassword, verifyToken } from "@/lib/auth";
 
+const normalizeIds = (value) =>
+  (Array.isArray(value) ? value : [])
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean);
+
 export async function GET(request) {
   await connectDb();
   const cookieStore = await cookies();
@@ -49,6 +54,10 @@ export async function POST(request) {
     handicap: payload.handicap || 0,
     status: payload.status || "active",
     defaultTeeName,
+    hasCart: Boolean(payload.hasCart),
+    friends: normalizeIds(payload.friends),
+    enemies: normalizeIds(payload.enemies),
+    family: normalizeIds(payload.family),
   });
   return NextResponse.json({ id: user._id });
 }

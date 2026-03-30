@@ -11,6 +11,11 @@ import {
 } from "@/lib/scoring";
 import { verifyToken, hashPassword } from "@/lib/auth";
 
+const normalizeIds = (value) =>
+  (Array.isArray(value) ? value : [])
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean);
+
 export async function PATCH(request, { params }) {
   await connectDb();
   const cookieStore = await cookies();
@@ -61,6 +66,18 @@ export async function PATCH(request, { params }) {
     const nextTee = String(body.defaultTeeName).trim();
     console.log('nextTee ', nextTee)
     updates.defaultTeeName = nextTee ? nextTee.toUpperCase() : null;
+  }
+  if (body.hasCart != null) {
+    updates.hasCart = Boolean(body.hasCart);
+  }
+  if (body.friends != null) {
+    updates.friends = normalizeIds(body.friends);
+  }
+  if (body.enemies != null) {
+    updates.enemies = normalizeIds(body.enemies);
+  }
+  if (body.family != null) {
+    updates.family = normalizeIds(body.family);
   }
   if (body.password) {
     updates.passwordHash = await hashPassword(body.password);

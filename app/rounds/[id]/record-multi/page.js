@@ -150,6 +150,41 @@ export default function RecordMultiPage() {
     [round]
   );
 
+  useEffect(() => {
+    if (!round || !me || selectedPlayers.length > 0) {
+      return;
+    }
+    const meId = String(me._id || "");
+    if (!meId) {
+      return;
+    }
+    const groupFromRound = round.playerGroups?.find(
+      (entry) => String(entry.player) === meId
+    )?.group;
+    const groupFromScorecard = scorecards.find(
+      (card) => String(card.player?._id) === meId
+    )?.group;
+    const group = groupFromRound || groupFromScorecard;
+    if (!group) {
+      return;
+    }
+    const groupPlayerIds = players
+      .filter((player) => {
+        const playerId = String(player?._id);
+        const fromRound = round.playerGroups?.find(
+          (entry) => String(entry.player) === playerId
+        )?.group;
+        const fromCard = scorecards.find(
+          (card) => String(card.player?._id) === playerId
+        )?.group;
+        return (fromRound || fromCard) === group;
+      })
+      .map((player) => player._id);
+    if (groupPlayerIds.length > 0) {
+      setSelectedPlayers(groupPlayerIds);
+    }
+  }, [me, players, round, scorecards, selectedPlayers.length]);
+
   const getCardForPlayer = (playerId) => {
     const existing = scorecards.find(
       (card) => String(card.player?._id) === String(playerId)

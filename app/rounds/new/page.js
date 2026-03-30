@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
   Card,
   Group,
+  Accordion,
   Modal,
   Select,
+  Stack,
   Table,
   Text,
   Textarea,
@@ -44,6 +46,8 @@ export default function NewRoundPage() {
   const [users, setUsers] = useState([]);
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [playerTees, setPlayerTees] = useState({});
+  const [playerGroups, setPlayerGroups] = useState({});
+  const [groupMarshals, setGroupMarshals] = useState({});
   const [description, setDescription] = useState("");
   const [bets, setBets] = useState({ culebra: 0 });
   const [startedAt, setStartedAt] = useState(() =>
@@ -57,6 +61,17 @@ export default function NewRoundPage() {
   const [culebraEnabled, setCulebraEnabled] = useState(false);
   const [culebraPlayers, setCulebraPlayers] = useState([]);
   const [culebraAmount, setCulebraAmount] = useState(0);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [pollLoading, setPollLoading] = useState(false);
+  const [pollData, setPollData] = useState(null);
+
+  const userById = useMemo(() => {
+    const map = {};
+    users.forEach((user) => {
+      map[String(user._id)] = user;
+    });
+    return map;
+  }, [users]);
 
   useEffect(() => {
     fetch("/api/me")
@@ -121,6 +136,11 @@ export default function NewRoundPage() {
     defaultTeeName: user.defaultTeeName || "",
   }));
 
+  const pollOptions = useMemo(
+    () => (Array.isArray(pollData?.options) ? pollData.options : []),
+    [pollData]
+  );
+
   const selectedCourse = courses.find(
     (course) => String(course.courseId) === String(selectedCourseId)
   );
@@ -137,6 +157,80 @@ export default function NewRoundPage() {
     allTees.find((option) => option.tee_name === "BLANCAS")?.tee_name ||
     allTees[0]?.tee_name ||
     "";
+
+  const roundMeta = {
+    holes: Number(holes) || 18,
+    nineType: holes === "9" ? nineType : "front",
+  };
+
+  const selectedPlayerRows = useMemo(() => {
+    if (selectedPlayers.length === 0) {
+      return [];
+    }
+    return selectedPlayers
+      .map((playerId) => {
+        const player = playerOptions.find(
+          (option) => option.value === playerId
+        );
+        if (!player) {
+          return null;
+        }
+        const preferred = String(player.defaultTeeName || "").toUpperCase();
+        const preferredValid =
+          preferred && allTees.find((option) => option.tee_name === preferred);
+        const teeName =
+          playerTees[playerId] || preferredValid?.tee_name || defaultTeeName;
+        const tee = allTees.find((option) => option.tee_name === teeName);
+        const courseHandicap = getCourseHandicapForRound(
+          tee,
+          roundMeta,
+          player.handicap
+        );
+        const group = playerGroups[playerId];
+        const groupNumberRaw =
+          typeof group === "string" ? group.replace(/^G/i, "") : group;
+        const groupNumber = groupNumberRaw ? Number(groupNumberRaw) : null;
+        const groupIndex = Number.isFinite(groupNumber)
+          ? (groupNumber - 1) % 4
+          : null;
+        const groupColors = [
+          "rgba(25, 113, 194, 0.14)",
+          "rgba(46, 139, 87, 0.16)",
+          "rgba(240, 140, 0, 0.18)",
+          "rgba(153, 102, 255, 0.16)",
+        ];
+        const groupShade =
+          groupIndex != null ? groupColors[groupIndex] : null;
+        return {
+          id: playerId,
+          name: player.name,
+          group: Number.isFinite(groupNumber) ? groupNumber : null,
+          groupLabel: Number.isFinite(groupNumber)
+            ? `G${groupNumber}`
+            : "-",
+          teeName: teeName || "-",
+          courseHandicap,
+          groupShade,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const groupA = a.group ? Number(a.group) : 99;
+        const groupB = b.group ? Number(b.group) : 99;
+        if (groupA !== groupB) {
+          return groupA - groupB;
+        }
+        return a.name.localeCompare(b.name);
+      });
+  }, [
+    selectedPlayers,
+    playerOptions,
+    playerTees,
+    defaultTeeName,
+    allTees,
+    roundMeta,
+    playerGroups,
+  ]);
 
   const togglePlayer = (playerId) => {
     setSelectedPlayers((prev) => {
@@ -163,7 +257,76 @@ export default function NewRoundPage() {
         }
         return nextTees;
       });
+      setPlayerGroups((prevGroups) => {
+        const nextGroups = { ...prevGroups };
+        if (exists) {
+          delete nextGroups[playerId];
+        }
+        return nextGroups;
+      });
+      setGroupMarshals((prevMarshals) => {
+        const nextMarshals = { ...prevMarshals };
+        Object.keys(nextMarshals).forEach((groupKey) => {
+          if (nextMarshals[groupKey] === playerId) {
+            delete nextMarshals[groupKey];
+          }
+        });
+        return nextMarshals;
+      });
       return next;
+    });
+  };
+
+  const setPlayerGroup = (playerId, group) => {
+    setSelectedPlayers((prev) => {
+      if (!prev.includes(playerId)) {
+        return [...prev, playerId];
+      }
+      return prev;
+    });
+    setPlayerGroups((prevGroups) => {
+      const currentRaw = prevGroups[playerId];
+      const current = Number.isFinite(
+        Number(String(currentRaw || "").replace(/^G/i, ""))
+      )
+        ? Number(String(currentRaw || "").replace(/^G/i, ""))
+        : currentRaw;
+      const nextGroups = { ...prevGroups };
+      if (current === group) {
+        delete nextGroups[playerId];
+        setGroupMarshals((prevMarshals) => {
+          const nextMarshals = { ...prevMarshals };
+          if (nextMarshals[group] === playerId) {
+            delete nextMarshals[group];
+          }
+          return nextMarshals;
+        });
+        setSelectedPlayers((prev) => prev.filter((id) => id !== playerId));
+      } else {
+        nextGroups[playerId] = group;
+      }
+      return nextGroups;
+    });
+  };
+
+  const toggleMarshal = (playerId) => {
+    const groupRaw = playerGroups[playerId];
+    const group = Number.isFinite(
+      Number(String(groupRaw || "").replace(/^G/i, ""))
+    )
+      ? Number(String(groupRaw || "").replace(/^G/i, ""))
+      : null;
+    if (!group) {
+      return;
+    }
+    setGroupMarshals((prevMarshals) => {
+      const nextMarshals = { ...prevMarshals };
+      if (nextMarshals[group] === playerId) {
+        delete nextMarshals[group];
+      } else {
+        nextMarshals[group] = playerId;
+      }
+      return nextMarshals;
     });
   };
 
@@ -173,11 +336,6 @@ export default function NewRoundPage() {
 
   const setEditingTee = (playerId, isEditing) => {
     setEditingTeeByPlayer((prev) => ({ ...prev, [playerId]: isEditing }));
-  };
-
-  const roundMeta = {
-    holes: Number(holes) || 18,
-    nineType: holes === "9" ? nineType : "front",
   };
 
   const createEmptyBet = () => ({
@@ -215,6 +373,339 @@ export default function NewRoundPage() {
       prev.filter((playerId) => selectedPlayers.includes(playerId))
     );
   }, [selectedPlayers]);
+
+  const loadPoll = async () => {
+    setPollLoading(true);
+    try {
+      const res = await fetch("/api/poll");
+      if (!res.ok) {
+        throw new Error("No se pudo cargar la encuesta.");
+      }
+      const data = await res.json();
+      setPollData(data);
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo cargar",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setPollLoading(false);
+    }
+  };
+
+  const openPoll = () => {
+    setPollOpen(true);
+    if (!pollData) {
+      loadPoll();
+    }
+  };
+
+  const autoAssignGroups = (incomingIds) => {
+    const existingIds = Array.isArray(selectedPlayers) ? selectedPlayers : [];
+    const allIds = Array.from(new Set([...existingIds, ...incomingIds]));
+    if (allIds.length === 0) {
+      return;
+    }
+
+    const getUser = (id) => userById[String(id)];
+    const getName = (id) => getUser(id)?.name || "Jugador";
+    const getHandicap = (id) => Number(getUser(id)?.handicap || 0);
+    const hasCart = (id) => Boolean(getUser(id)?.hasCart);
+    const getFamily = (id) =>
+      (Array.isArray(getUser(id)?.family) ? getUser(id).family : []).map(
+        (entry) => String(entry)
+      );
+    const getEnemies = (id) =>
+      (Array.isArray(getUser(id)?.enemies) ? getUser(id).enemies : []).map(
+        (entry) => String(entry)
+      );
+
+    const allIdSet = new Set(allIds.map((id) => String(id)));
+    const existingGroups = Object.entries(playerGroups).reduce(
+      (acc, [playerId, value]) => {
+        const normalized = Number(String(value || "").replace(/^G/i, ""));
+        acc[playerId] = Number.isFinite(normalized) ? normalized : value;
+        return acc;
+      },
+      {}
+    );
+    const existingGroupNumbers = Object.values(existingGroups)
+      .map((value) => Number(String(value || "").replace(/^G/i, "")))
+      .filter((value) => Number.isFinite(value));
+    const existingGroupCount =
+      existingGroupNumbers.length > 0 ? Math.max(...existingGroupNumbers) : 0;
+
+    const totalPlayers = allIds.length;
+    const minGroups = Math.ceil(totalPlayers / 5);
+    const maxGroups = Math.floor(totalPlayers / 4);
+    let groupCount = Math.max(existingGroupCount, minGroups);
+    const issues = [];
+
+    if (maxGroups < minGroups) {
+      issues.push(
+        `Condición 1: No es posible formar grupos de 4 o 5 con ${totalPlayers} jugadores.`
+      );
+    }
+    if (groupCount > 4) {
+      issues.push(
+        `Condición 1: Se requieren ${groupCount} grupos, pero solo existen 4.`
+      );
+      groupCount = 4;
+    }
+    if (groupCount < 1) {
+      groupCount = 1;
+    }
+
+    const groups = Array.from({ length: groupCount }, (_, idx) => ({
+      id: `G${idx + 1}`,
+      members: [],
+      handicap: 0,
+      carts: 0,
+    }));
+
+    const addToGroup = (group, playerId) => {
+      group.members.push(playerId);
+      group.handicap += getHandicap(playerId);
+      group.carts += hasCart(playerId) ? 1 : 0;
+    };
+
+    allIds.forEach((playerId) => {
+      const groupId = existingGroups[String(playerId)];
+      if (!groupId) {
+        return;
+      }
+      const idx = Number(String(groupId).replace(/^G/i, "")) - 1;
+      if (idx >= 0 && idx < groups.length) {
+        addToGroup(groups[idx], String(playerId));
+      }
+    });
+
+    const parent = {};
+    const find = (x) => {
+      parent[x] = parent[x] || x;
+      if (parent[x] === x) return x;
+      parent[x] = find(parent[x]);
+      return parent[x];
+    };
+    const union = (a, b) => {
+      const ra = find(a);
+      const rb = find(b);
+      if (ra !== rb) parent[rb] = ra;
+    };
+    allIds.forEach((playerId) => {
+      const id = String(playerId);
+      getFamily(id).forEach((relative) => {
+        if (allIdSet.has(relative)) {
+          union(id, relative);
+        }
+      });
+    });
+
+    const clustersByRoot = {};
+    allIds.forEach((playerId) => {
+      const id = String(playerId);
+      const root = find(id);
+      if (!clustersByRoot[root]) clustersByRoot[root] = [];
+      clustersByRoot[root].push(id);
+    });
+    const clusters = Object.values(clustersByRoot).sort(
+      (a, b) => b.length - a.length
+    );
+
+    const enemyPairs = [];
+    allIds.forEach((playerId) => {
+      const id = String(playerId);
+      getEnemies(id).forEach((enemyId) => {
+        if (allIdSet.has(enemyId)) {
+          const pair = [id, enemyId].sort().join("-");
+          enemyPairs.push(pair);
+        }
+      });
+    });
+    const enemySet = new Set(enemyPairs);
+    const hasEnemyConflict = (group, cluster) =>
+      cluster.some((id) =>
+        group.members.some((member) =>
+          enemySet.has([id, member].sort().join("-"))
+        )
+      );
+
+    clusters.forEach((cluster) => {
+      const assignedGroups = new Set(
+        cluster
+          .map((id) => existingGroups[String(id)])
+          .filter(Boolean)
+      );
+      if (assignedGroups.size > 1) {
+        issues.push(
+          `Condición 2: Familiares separados: ${cluster
+            .map((id) => getName(id))
+            .join(", ")}.`
+        );
+      }
+    });
+
+    const avgHandicap = totalPlayers
+      ? allIds.reduce((sum, id) => sum + getHandicap(id), 0) / groupCount
+      : 0;
+
+    const unassignedClusters = clusters.filter((cluster) =>
+      cluster.some((id) => !existingGroups[String(id)])
+    );
+
+    unassignedClusters.forEach((cluster) => {
+      const clusterSize = cluster.length;
+      const clusterHandicap = cluster.reduce(
+        (sum, id) => sum + getHandicap(id),
+        0
+      );
+      const clusterCarts = cluster.reduce(
+        (sum, id) => sum + (hasCart(id) ? 1 : 0),
+        0
+      );
+      const preferredGroup = cluster
+        .map((id) => existingGroups[String(id)])
+        .find(Boolean);
+
+      const candidates = groups
+        .map((group, idx) => ({ group, idx }))
+        .filter(
+          ({ group }) =>
+            group.members.length + clusterSize <= 5 &&
+            !hasEnemyConflict(group, cluster)
+        );
+
+      if (preferredGroup) {
+        const preferredIndex =
+          Number(String(preferredGroup).replace(/^G/i, "")) - 1;
+        const preferred = candidates.find(
+          ({ idx }) => idx === preferredIndex
+        );
+        if (preferred) {
+          cluster.forEach((id) => addToGroup(preferred.group, id));
+          cluster.forEach((id) => {
+            if (!existingGroups[String(id)]) {
+              existingGroups[String(id)] = Number(
+                String(preferred.group.id).replace(/^G/i, "")
+              );
+            }
+          });
+          return;
+        }
+      }
+
+      if (candidates.length === 0) {
+        issues.push(
+          `Condición 4: Enemigos en el mismo grupo o sin espacio para ${cluster
+            .map((id) => getName(id))
+            .join(", ")}.`
+        );
+        return;
+      }
+
+      candidates.sort((a, b) => {
+        const nextA = a.group.handicap + clusterHandicap;
+        const nextB = b.group.handicap + clusterHandicap;
+        const scoreA =
+          Math.abs(nextA - avgHandicap) +
+          (a.group.carts < 2 && clusterCarts === 0 ? 100 : 0);
+        const scoreB =
+          Math.abs(nextB - avgHandicap) +
+          (b.group.carts < 2 && clusterCarts === 0 ? 100 : 0);
+        return scoreA - scoreB;
+      });
+
+      const target = candidates[0].group;
+      cluster.forEach((id) => addToGroup(target, id));
+      cluster.forEach((id) => {
+        if (!existingGroups[String(id)]) {
+          existingGroups[String(id)] = Number(
+            String(target.id).replace(/^G/i, "")
+          );
+        }
+      });
+    });
+
+    groups.forEach((group) => {
+      if (group.members.length < 4 || group.members.length > 5) {
+        if (group.members.length > 0) {
+          issues.push(
+            `Condición 1: Tamaño del grupo ${group.id} fuera de rango (tiene ${
+              group.members.length
+            }): ${group.members.map((id) => getName(id)).join(", ")}.`
+          );
+        }
+      }
+      if (group.carts < 2 && group.members.length > 0) {
+        issues.push(
+          `Condición 5: Grupo ${group.id} con menos de 2 carritos: ${group.members
+            .map((id) => getName(id))
+            .join(", ")}.`
+        );
+      }
+    });
+
+    const groupHandicaps = groups
+      .filter((group) => group.members.length > 0)
+      .map((group) => group.handicap);
+    if (groupHandicaps.length > 1) {
+      const maxHandicap = Math.max(...groupHandicaps);
+      const minHandicap = Math.min(...groupHandicaps);
+      if (maxHandicap - minHandicap > 8) {
+        issues.push(
+          `Condición 3: Handicap total desbalanceado (max ${maxHandicap} vs min ${minHandicap}).`
+        );
+      }
+    }
+
+    const violatingEnemyPairs = [];
+    groups.forEach((group) => {
+      group.members.forEach((id) => {
+        group.members.forEach((other) => {
+          if (id === other) return;
+          const key = [id, other].sort().join("-");
+          if (enemySet.has(key)) {
+            violatingEnemyPairs.push(
+              `${getName(id)} / ${getName(other)}`
+            );
+          }
+        });
+      });
+    });
+    if (violatingEnemyPairs.length > 0) {
+      issues.push(
+        `Condición 4: Enemigos en el mismo grupo: ${Array.from(
+          new Set(violatingEnemyPairs)
+        ).join(", ")}.`
+      );
+    }
+
+    setPlayerGroups((prev) => ({ ...prev, ...existingGroups }));
+
+    if (issues.length > 0) {
+      notifications.show({
+        title: "Asignación de grupos con advertencias",
+        message: issues.join("\n"),
+        color: "clay",
+      });
+    }
+  };
+
+  const addPlayersFromOption = (optionName) => {
+    const playersToAdd =
+      pollOptions.find((option) => option.name === optionName)?.players || [];
+    if (playersToAdd.length === 0) {
+      return;
+    }
+    const newIds = playersToAdd.map((player) => String(player._id));
+    setSelectedPlayers((prev) => {
+      const set = new Set(prev);
+      newIds.forEach((id) => set.add(id));
+      return Array.from(set);
+    });
+    autoAssignGroups(newIds);
+  };
 
   const openNewBet = () => {
     setBetDraft(createEmptyBet());
@@ -279,6 +770,20 @@ export default function NewRoundPage() {
       });
       return;
     }
+    const groupedPlayerIds = Object.keys(playerGroups);
+    if (
+      selectedPlayers.length > 0 &&
+      groupedPlayerIds.length !== selectedPlayers.length
+    ) {
+      notifications.show({
+        title: "Faltan grupos",
+        message: "Selecciona el grupo de salida de todos los jugadores.",
+        color: "clay",
+      });
+      return;
+    }
+    const effectivePlayers =
+      groupedPlayerIds.length > 0 ? groupedPlayerIds : selectedPlayers;
     setLoading(true);
     try {
       const me = await fetch("/api/me").then((res) => res.json());
@@ -295,10 +800,18 @@ export default function NewRoundPage() {
           nineType: holes === "9" ? nineType : "front",
           createdBy: me.user?._id,
           supervisor: me.user?._id,
-          players: selectedPlayers,
-          playerTees: selectedPlayers.map((playerId) => ({
+          players: effectivePlayers,
+          playerTees: effectivePlayers.map((playerId) => ({
             player: playerId,
             teeName: playerTees[playerId],
+          })),
+          playerGroups: effectivePlayers.map((playerId) => ({
+            player: playerId,
+            group: playerGroups[playerId],
+          })),
+          groupMarshals: Object.entries(groupMarshals).map(([group, player]) => ({
+            group: Number(group),
+            player,
           })),
           individualBets,
           culebra: {
@@ -369,46 +882,74 @@ export default function NewRoundPage() {
                   player.handicap
                 );
                 const isEditing = Boolean(editingTeeByPlayer[player.value]);
+                const currentGroupRaw = playerGroups[player.value];
+                const currentGroup = Number.isFinite(
+                  Number(String(currentGroupRaw || "").replace(/^G/i, ""))
+                )
+                  ? Number(String(currentGroupRaw || "").replace(/^G/i, ""))
+                  : null;
+                const isMarshal =
+                  currentGroup &&
+                  groupMarshals[currentGroup] === player.value;
                 return (
-                  <Table.Tr key={player.value}>
-                    <Table.Td>{player.name}</Table.Td>
-                    <Table.Td>{player.handicap}</Table.Td>
-                    <Table.Td>
-                      {isEditing && selectedCourseId ? (
-                        <Select
-                          data={teeOptions}
-                          value={teeName}
-                          onChange={(value) => {
-                            updatePlayerTee(player.value, value || "");
-                            setEditingTee(player.value, false);
-                          }}
-                          placeholder="Sin tee"
-                          size="xs"
-                        />
-                      ) : (
-                        <Button
-                          variant="subtle"
-                          size="xs"
-                          className="gml-link-text"
-                          onClick={() => setEditingTee(player.value, true)}
-                          disabled={!selectedCourseId}
-                        >
-                          {teeName || "Sin tee"}
-                        </Button>
-                      )}
-                    </Table.Td>
-                    <Table.Td>{courseHandicap}</Table.Td>
-                    <Table.Td>
-                      <Button
-                        size="xs"
-                        variant={selected ? "filled" : "light"}
-                        color={selected ? "club" : "dusk"}
-                        onClick={() => togglePlayer(player.value)}
-                      >
-                        {selected ? "Quitar" : "Agregar"}
-                      </Button>
-                    </Table.Td>
-                  </Table.Tr>
+                  <Fragment key={player.value}>
+                    <Table.Tr>
+                      <Table.Td>{player.name}</Table.Td>
+                      <Table.Td>{player.handicap}</Table.Td>
+                      <Table.Td>
+                        {isEditing && selectedCourseId ? (
+                          <Select
+                            data={teeOptions}
+                            value={teeName}
+                            onChange={(value) => {
+                              updatePlayerTee(player.value, value || "");
+                              setEditingTee(player.value, false);
+                            }}
+                            placeholder="Sin tee"
+                            size="xs"
+                          />
+                        ) : (
+                          <Button
+                            variant="subtle"
+                            size="xs"
+                            className="gml-link-text"
+                            onClick={() => setEditingTee(player.value, true)}
+                            disabled={!selectedCourseId}
+                          >
+                            {teeName || "Sin tee"}
+                          </Button>
+                        )}
+                      </Table.Td>
+                      <Table.Td>{courseHandicap}</Table.Td>
+                      <Table.Td />
+                    </Table.Tr>
+                    <Table.Tr key={`${player.value}-group`}>
+                      <Table.Td colSpan={5}>
+                        <Group gap="xs">
+                          {[1, 2, 3, 4].map((group) => (
+                            <Button
+                              key={`${player.value}-g${group}`}
+                              size="xs"
+                              variant={currentGroup === group ? "filled" : "light"}
+                              color={currentGroup === group ? "club" : "dusk"}
+                              onClick={() => setPlayerGroup(player.value, group)}
+                            >
+                              G{group}
+                            </Button>
+                          ))}
+                          <Button
+                            size="xs"
+                            variant={isMarshal ? "filled" : "light"}
+                            color={isMarshal ? "orange" : "dusk"}
+                            onClick={() => toggleMarshal(player.value)}
+                            disabled={!currentGroup}
+                          >
+                            M
+                          </Button>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  </Fragment>
                 );
               })}
             </Table.Tbody>
@@ -616,6 +1157,72 @@ export default function NewRoundPage() {
             </>
           )}
         </Modal>
+        <Modal
+          opened={pollOpen}
+          onClose={() => setPollOpen(false)}
+          title="Encuesta"
+          centered
+        >
+          {pollLoading ? (
+            <Text size="sm" c="dusk.6">
+              Cargando encuesta...
+            </Text>
+          ) : pollOptions.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              No hay opciones disponibles.
+            </Text>
+          ) : (
+            pollOptions.map((option) => {
+              const name = option?.name;
+              const matched = option?.players || [];
+              return (
+                <Card key={name} withBorder mb="sm">
+                  <Group justify="space-between" align="center" mb="xs">
+                    <Text fw={600}>{name}</Text>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      onClick={() => addPlayersFromOption(name)}
+                      disabled={matched.length === 0}
+                    >
+                      Agregar jugadores
+                    </Button>
+                  </Group>
+                  <Accordion
+                    variant="contained"
+                    radius="md"
+                    chevronPosition="right"
+                  >
+                    <Accordion.Item value={`poll-${name}`}>
+                      <Accordion.Control>
+                        {matched.length === 0
+                          ? "Sin jugadores"
+                          : `${matched.length} jugador${
+                              matched.length === 1 ? "" : "es"
+                            }`}
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        {matched.length === 0 ? (
+                          <Text size="sm" c="dusk.6">
+                            No hay jugadores para esta opción.
+                          </Text>
+                        ) : (
+                          <Stack gap={6}>
+                            {matched.map((player) => (
+                              <Text key={player._id} size="sm">
+                                {player.name}
+                              </Text>
+                            ))}
+                          </Stack>
+                        )}
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  </Accordion>
+                </Card>
+              );
+            })
+          )}
+        </Modal>
         <Card>
           <form className="gml-form" onSubmit={handleSubmit}>
             <Select
@@ -652,15 +1259,24 @@ export default function NewRoundPage() {
               <Text size="sm" fw={600} mb={6}>
                 Jugadores
               </Text>
-            <Button
-              variant="light"
-              onClick={() => setPlayersModalOpen(true)}
-              disabled={!selectedCourseId}
-            >
-              {selectedPlayers.length > 0
-                ? `Editar jugadores (${selectedPlayers.length})`
-                : "Seleccionar jugadores"}
-            </Button>
+            <Group>
+              <Button
+                variant="light"
+                onClick={() => setPlayersModalOpen(true)}
+                disabled={!selectedCourseId}
+              >
+                {selectedPlayers.length > 0
+                  ? `Editar jugadores (${selectedPlayers.length})`
+                  : "Seleccionar jugadores"}
+              </Button>
+              <Button
+                variant="light"
+                onClick={openPoll}
+                disabled={!selectedCourseId}
+              >
+                Ver encuesta
+              </Button>
+            </Group>
               {selectedPlayers.length > 0 ? (
                 <Text size="xs" c="dusk.6" mt={4}>
                   {selectedPlayers
@@ -672,6 +1288,31 @@ export default function NewRoundPage() {
                     .filter(Boolean)
                     .join(", ")}
                 </Text>
+              ) : null}
+              {selectedPlayerRows.length > 0 ? (
+                <Table mt="sm" striped highlightOnHover className="gml-group-table">
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Grupo</Table.Th>
+                      <Table.Th>Jugador</Table.Th>
+                      <Table.Th>Salida</Table.Th>
+                      <Table.Th>HC Tee</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {selectedPlayerRows.map((row) => (
+                      <Table.Tr
+                        key={row.id}
+                        data-group={row.group || ""}
+                      >
+                        <Table.Td>{row.groupLabel}</Table.Td>
+                        <Table.Td>{row.name}</Table.Td>
+                        <Table.Td>{row.teeName}</Table.Td>
+                        <Table.Td>{row.courseHandicap}</Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
               ) : null}
             </div>
             <div>

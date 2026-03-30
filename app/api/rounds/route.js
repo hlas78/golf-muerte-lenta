@@ -134,6 +134,15 @@ export async function POST(request) {
           return acc;
         }, {})
       : {};
+    const requestedGroups = Array.isArray(payload.playerGroups)
+      ? payload.playerGroups.reduce((acc, entry) => {
+          if (!entry?.player || !entry?.group) {
+            return acc;
+          }
+          acc[String(entry.player)] = Number(entry.group);
+          return acc;
+        }, {})
+      : {};
     const participants = await User.find({ _id: { $in: playerIds } });
     const teeByPlayer = new Map();
     participants.forEach((player) => {
@@ -152,6 +161,18 @@ export async function POST(request) {
       player: playerId,
       teeName: teeByPlayer.get(String(playerId)) || defaultTeeName,
     }));
+    round.playerGroups = playerIds.map((playerId) => ({
+      player: playerId,
+      group: requestedGroups[String(playerId)] || 1,
+    }));
+    round.groupMarshals = Array.isArray(payload.groupMarshals)
+      ? payload.groupMarshals
+          .filter((entry) => entry?.player && entry?.group)
+          .map((entry) => ({
+            player: entry.player,
+            group: Number(entry.group),
+          }))
+      : [];
     round.status = "active";
     await round.save();
     console.log('Ronda guardada')

@@ -260,6 +260,19 @@ tbody .gml-sticky-col {
   text-decoration: underline !important;
 }
 
+.gml-group-table tbody tr[data-group="1"] td {
+  background-color: rgba(25, 113, 194, 0.14) !important;
+}
+.gml-group-table tbody tr[data-group="2"] td {
+  background-color: rgba(46, 139, 87, 0.16) !important;
+}
+.gml-group-table tbody tr[data-group="3"] td {
+  background-color: rgba(240, 140, 0, 0.18) !important;
+}
+.gml-group-table tbody tr[data-group="4"] td {
+  background-color: rgba(153, 102, 255, 0.16) !important;
+}
+
 @media (max-width: 600px) {
   .gml-score-btn {
     padding: 0 0.25rem;

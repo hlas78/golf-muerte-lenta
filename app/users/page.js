@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Group,
+  MultiSelect,
   PasswordInput,
   Select,
   Text,
@@ -28,6 +29,10 @@ export default function UsersPage() {
     role: "player",
     password: "",
     defaultTeeName: "BLANCAS",
+    hasCart: false,
+    friends: [],
+    enemies: [],
+    family: [],
   });
   const [saving, setSaving] = useState(false);
   const nameInputRef = useRef(null);
@@ -69,6 +74,16 @@ export default function UsersPage() {
       role: user.role || "player",
       password: "",
       defaultTeeName: user.defaultTeeName || "BLANCAS",
+      hasCart: Boolean(user.hasCart),
+      friends: Array.isArray(user.friends)
+        ? user.friends.map((id) => String(id))
+        : [],
+      enemies: Array.isArray(user.enemies)
+        ? user.enemies.map((id) => String(id))
+        : [],
+      family: Array.isArray(user.family)
+        ? user.family.map((id) => String(id))
+        : [],
     });
     setTimeout(() => {
       nameInputRef.current?.focus();
@@ -99,6 +114,10 @@ export default function UsersPage() {
         role: form.role,
         password: form.password || undefined,
         defaultTeeName: form.defaultTeeName || "",
+        hasCart: Boolean(form.hasCart),
+        friends: form.friends || [],
+        enemies: form.enemies || [],
+        family: form.family || [],
       };
       const res = creating
         ? await fetch("/api/users", {
@@ -186,11 +205,15 @@ export default function UsersPage() {
                   name: "",
                   phone: "",
                   handicap: "",
-                  grintId: "",
-                  role: "player",
-                  password: "",
-                  defaultTeeName: "BLANCAS",
-                });
+                    grintId: "",
+                    role: "player",
+                    password: "",
+                    defaultTeeName: "BLANCAS",
+                    hasCart: false,
+                    friends: [],
+                    enemies: [],
+                    family: [],
+                  });
               }}
             >
               Nuevo jugador
@@ -259,6 +282,58 @@ export default function UsersPage() {
               ]}
             />
             <Select
+              label="Con carrito"
+              placeholder="Selecciona"
+              value={form.hasCart ? "yes" : "no"}
+              onChange={(value) => updateForm({ hasCart: value === "yes" })}
+              data={[
+                { value: "yes", label: "Sí" },
+                { value: "no", label: "No" },
+              ]}
+            />
+            <MultiSelect
+              label="Amigos"
+              placeholder="Selecciona jugadores"
+              data={users
+                .filter((user) => user._id !== selectedId)
+                .map((user) => ({
+                  value: user._id,
+                  label: user.name,
+                }))}
+              value={form.friends}
+              onChange={(value) => updateForm({ friends: value })}
+              searchable
+              clearable
+            />
+            <MultiSelect
+              label="Enemigos"
+              placeholder="Selecciona jugadores"
+              data={users
+                .filter((user) => user._id !== selectedId)
+                .map((user) => ({
+                  value: user._id,
+                  label: user.name,
+                }))}
+              value={form.enemies}
+              onChange={(value) => updateForm({ enemies: value })}
+              searchable
+              clearable
+            />
+            <MultiSelect
+              label="Familiares"
+              placeholder="Selecciona jugadores"
+              data={users
+                .filter((user) => user._id !== selectedId)
+                .map((user) => ({
+                  value: user._id,
+                  label: user.name,
+                }))}
+              value={form.family}
+              onChange={(value) => updateForm({ family: value })}
+              searchable
+              clearable
+            />
+            <Select
               label="Rol"
               value={form.role}
               onChange={(value) => updateForm({ role: value })}
@@ -292,6 +367,10 @@ export default function UsersPage() {
                       role: "player",
                       password: "",
                       defaultTeeName: "BLANCAS",
+                      hasCart: false,
+                      friends: [],
+                      enemies: [],
+                      family: [],
                     });
                     return;
                   }

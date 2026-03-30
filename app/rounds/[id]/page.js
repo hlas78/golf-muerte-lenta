@@ -213,12 +213,23 @@ export default function RoundDetailPage() {
 
   const sortedScorecards = useMemo(
     () =>
-      [...scorecards].sort((a, b) =>
-        (a.player?.name || "").localeCompare(b.player?.name || "", "es", {
+      [...scorecards].sort((a, b) => {
+        const groupA =
+          round?.playerGroups?.find(
+            (entry) => String(entry.player) === String(a.player?._id)
+          )?.group || 1;
+        const groupB =
+          round?.playerGroups?.find(
+            (entry) => String(entry.player) === String(b.player?._id)
+          )?.group || 1;
+        if (groupA !== groupB) {
+          return groupA - groupB;
+        }
+        return (a.player?.name || "").localeCompare(b.player?.name || "", "es", {
           sensitivity: "base",
-        })
-      ),
-    [scorecards]
+        });
+      }),
+    [scorecards, round?.playerGroups]
   );
 
   const defaultBets = {
@@ -1730,7 +1741,26 @@ export default function RoundDetailPage() {
                     return (
                       <Table.Tr key={card._id}>
                         <Table.Td className="gml-sticky-col">
-                          {card.player?.name || "Jugador"}
+                          <Group gap="xs">
+                            <Badge color="dusk" variant="light">
+                              G
+                              {round?.playerGroups?.find(
+                                (entry) =>
+                                  String(entry.player) ===
+                                  String(card.player?._id)
+                              )?.group || 1}
+                              {round?.groupMarshals?.find(
+                                (entry) =>
+                                  String(entry.player) ===
+                                  String(card.player?._id)
+                              )
+                                ? " · M"
+                                : ""}
+                            </Badge>
+                            <Text size="sm">
+                              {card.player?.name || "Jugador"}
+                            </Text>
+                          </Group>
                         </Table.Td>
                         {holes.map((hole) => {
                           const entry = card.holes?.find(
