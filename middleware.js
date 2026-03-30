@@ -21,7 +21,16 @@ export function middleware(request) {
   if (!token) {
     const magicToken = request.nextUrl.searchParams.get("token");
     if (magicToken) {
-      return NextResponse.next();
+      const verifyUrl = request.nextUrl.clone();
+      verifyUrl.pathname = "/auth/verify";
+      verifyUrl.searchParams.set("token", magicToken);
+      const nextUrl = request.nextUrl.clone();
+      nextUrl.searchParams.delete("token");
+      verifyUrl.searchParams.set(
+        "next",
+        `${nextUrl.pathname}${nextUrl.search}`
+      );
+      return NextResponse.redirect(verifyUrl);
     }
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";

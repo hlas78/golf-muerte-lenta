@@ -9,6 +9,7 @@ export default function VerifyClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const nextPath = searchParams.get("next") || "/";
   const [status, setStatus] = useState("validating");
   const [message, setMessage] = useState("Validando tu liga...");
 
@@ -29,7 +30,7 @@ export default function VerifyClient() {
         if (data.status === "active") {
           setStatus("active");
           setMessage("Acceso aprobado. Entrando...");
-          setTimeout(() => router.push("/"), 1200);
+          setTimeout(() => router.push(nextPath), 1200);
           return;
         }
         if (data.status === "pending") {

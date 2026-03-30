@@ -440,8 +440,16 @@ export default function NewRoundPage() {
     const minGroups = Math.ceil(totalPlayers / 5);
     const maxGroups = Math.floor(totalPlayers / 4);
     let groupCount = Math.max(existingGroupCount, minGroups);
+    if (maxGroups >= 1) {
+      groupCount = Math.min(groupCount, maxGroups);
+    }
+    if (groupCount < minGroups) {
+      groupCount = minGroups;
+    }
     const issues = [];
 
+    const minSize = Math.floor(totalPlayers / groupCount);
+    const maxSize = Math.ceil(totalPlayers / groupCount);
     if (maxGroups < minGroups) {
       issues.push(
         `Condición 1: No es posible formar grupos de 4 o 5 con ${totalPlayers} jugadores.`
@@ -568,13 +576,22 @@ export default function NewRoundPage() {
         .map((id) => existingGroups[String(id)])
         .find(Boolean);
 
-      const candidates = groups
+      let candidates = groups
         .map((group, idx) => ({ group, idx }))
         .filter(
           ({ group }) =>
-            group.members.length + clusterSize <= 5 &&
+            group.members.length + clusterSize <= maxSize &&
             !hasEnemyConflict(group, cluster)
         );
+
+      if (candidates.length === 0) {
+        candidates = groups
+          .map((group, idx) => ({ group, idx }))
+          .filter(
+            ({ group }) =>
+              group.members.length + clusterSize <= maxSize
+          );
+      }
 
       if (preferredGroup) {
         const preferredIndex =
@@ -596,11 +613,6 @@ export default function NewRoundPage() {
       }
 
       if (candidates.length === 0) {
-        issues.push(
-          `Condición 4: Enemigos en el mismo grupo o sin espacio para ${cluster
-            .map((id) => getName(id))
-            .join(", ")}.`
-        );
         return;
       }
 
@@ -628,15 +640,6 @@ export default function NewRoundPage() {
     });
 
     groups.forEach((group) => {
-      if (group.members.length < 4 || group.members.length > 5) {
-        if (group.members.length > 0) {
-          issues.push(
-            `Condición 1: Tamaño del grupo ${group.id} fuera de rango (tiene ${
-              group.members.length
-            }): ${group.members.map((id) => getName(id)).join(", ")}.`
-          );
-        }
-      }
       if (group.carts < 2 && group.members.length > 0) {
         issues.push(
           `Condición 5: Grupo ${group.id} con menos de 2 carritos: ${group.members
@@ -645,6 +648,48 @@ export default function NewRoundPage() {
         );
       }
     });
+
+    const overfilled = groups.filter((group) => group.members.length > maxSize);
+    const underfilled = groups.filter((group) => group.members.length < minSize);
+
+    if (overfilled.length > 0 && underfilled.length > 0) {
+      const tryMove = (fromGroup, toGroup) => {
+        const candidates = [...fromGroup.members].reverse();
+        for (const playerId of candidates) {
+          const enemyConflict = hasEnemyConflict(toGroup, [playerId]);
+          if (enemyConflict) {
+            continue;
+          }
+          fromGroup.members = fromGroup.members.filter((id) => id !== playerId);
+          fromGroup.handicap -= getHandicap(playerId);
+          fromGroup.carts -= hasCart(playerId) ? 1 : 0;
+          addToGroup(toGroup, playerId);
+          existingGroups[String(playerId)] = Number(
+            String(toGroup.id).replace(/^G/i, "")
+          );
+          return true;
+        }
+        return false;
+      };
+
+      overfilled.forEach((fromGroup) => {
+        while (
+          fromGroup.members.length > maxSize &&
+          underfilled.some((group) => group.members.length < minSize)
+        ) {
+          const target = underfilled.find(
+            (group) => group.members.length < minSize
+          );
+          if (!target) {
+            break;
+          }
+          const moved = tryMove(fromGroup, target);
+          if (!moved) {
+            break;
+          }
+        }
+      });
+    }
 
     const groupHandicaps = groups
       .filter((group) => group.members.length > 0)
@@ -683,13 +728,6 @@ export default function NewRoundPage() {
 
     setPlayerGroups((prev) => ({ ...prev, ...existingGroups }));
 
-    if (issues.length > 0) {
-      notifications.show({
-        title: "Asignación de grupos con advertencias",
-        message: issues.join("\n"),
-        color: "clay",
-      });
-    }
   };
 
   const addPlayersFromOption = (optionName) => {
@@ -1277,20 +1315,13 @@ export default function NewRoundPage() {
                 Ver encuesta
               </Button>
             </Group>
-              {selectedPlayers.length > 0 ? (
-                <Text size="xs" c="dusk.6" mt={4}>
-                  {selectedPlayers
-                    .map(
-                      (id) =>
-                        playerOptions.find((option) => option.value === id)
-                          ?.label
-                    )
-                    .filter(Boolean)
-                    .join(", ")}
-                </Text>
-              ) : null}
               {selectedPlayerRows.length > 0 ? (
-                <Table mt="sm" striped highlightOnHover className="gml-group-table">
+                <Table
+                  mt="xs"
+                  striped
+                  highlightOnHover
+                  className="gml-group-table gml-players-compact"
+                >
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>Grupo</Table.Th>

@@ -228,7 +228,7 @@ tbody .gml-sticky-col {
 
 .gml-players-compact .mantine-Table-root th,
 .gml-players-compact .mantine-Table-root td {
-  padding: 0.1rem 0.25rem !important;
+  padding: 0 !important;
   font-size: 0.68rem !important;
   line-height: 1.1;
   font-family: "Roboto Condensed", "Arial Narrow", Arial, sans-serif !important;
