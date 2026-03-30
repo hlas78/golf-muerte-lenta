@@ -743,6 +743,7 @@ export default function NewRoundPage() {
       return Array.from(set);
     });
     autoAssignGroups(newIds);
+    setPollOpen(false);
   };
 
   const openNewBet = () => {
@@ -1198,7 +1199,7 @@ export default function NewRoundPage() {
         <Modal
           opened={pollOpen}
           onClose={() => setPollOpen(false)}
-          title="Encuesta"
+          title={pollData?.pollName || "Encuesta"}
           centered
         >
           {pollLoading ? (
@@ -1246,11 +1247,19 @@ export default function NewRoundPage() {
                           </Text>
                         ) : (
                           <Stack gap={6}>
-                            {matched.map((player) => (
-                              <Text key={player._id} size="sm">
-                                {player.name}
-                              </Text>
-                            ))}
+                            {matched.map((player) => {
+                              const votedAt = player.votedAt
+                                ? new Date(player.votedAt)
+                                : null;
+                              const formatted = votedAt
+                                ? votedAt.toLocaleString()
+                                : "Sin fecha";
+                              return (
+                                <Text key={player._id} size="sm">
+                                  {player.name} · {formatted}
+                                </Text>
+                              );
+                            })}
                           </Stack>
                         )}
                       </Accordion.Panel>
@@ -1346,6 +1355,20 @@ export default function NewRoundPage() {
                 </Table>
               ) : null}
             </div>
+            <TextInput
+              label="Inicio de la jugada"
+              type="datetime-local"
+              value={startedAt}
+              onChange={(event) => setStartedAt(event.currentTarget.value)}
+            />
+            <Textarea
+              label="Descripcion (opcional)"
+              placeholder=""
+              value={description}
+              onChange={(event) => setDescription(event.currentTarget.value)}
+              autosize
+              minRows={2}
+            />
             <div>
               <Text size="sm" fw={600} mb={6}>
                 Apuestas
@@ -1515,20 +1538,6 @@ export default function NewRoundPage() {
                 </Text>
               )}
             </div>
-            <TextInput
-              label="Inicio de la jugada"
-              type="datetime-local"
-              value={startedAt}
-              onChange={(event) => setStartedAt(event.currentTarget.value)}
-            />
-            <Textarea
-              label="Descripcion (opcional)"
-              placeholder=""
-              value={description}
-              onChange={(event) => setDescription(event.currentTarget.value)}
-              autosize
-              minRows={2}
-            />
             <Group justify="space-between" mt="md">
               <Button color="club" type="submit" loading={loading}>
                 Abrir jugada

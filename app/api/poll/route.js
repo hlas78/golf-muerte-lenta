@@ -10,7 +10,7 @@ const POLL_URL =
 const normalizePhone = (value) => {
   const digits = String(value || "").replace(/\D/g, "");
   if (digits.length <= 10) return digits;
-  return digits
+  return digits.slice(-10);
 };
 
 export async function GET() {
@@ -52,6 +52,11 @@ export async function GET() {
     first?.parentMessage?._data?._data?.pollOptions ||
     first?.parentMessage?._data?.pollOptions ||
     [];
+  const pollName =
+    first?.parentMessage?.pollName ||
+    first?.parentMessage?._data?._data?.pollName ||
+    first?.parentMessage?._data?.pollName ||
+    "";
 
   const votesByOption = {};
   if (Array.isArray(data)) {
@@ -66,26 +71,40 @@ export async function GET() {
           return;
         }
         if (!votesByOption[name]) {
-          votesByOption[name] = new Set();
+          votesByOption[name] = new Map();
         }
-        votesByOption[name].add(phone);
+        const currentTs = Number(entry?.interractedAtTs || 0);
+        const existing = votesByOption[name].get(phone) || 0;
+        if (currentTs && currentTs > existing) {
+          votesByOption[name].set(phone, currentTs);
+        } else if (!existing && !currentTs) {
+          votesByOption[name].set(phone, 0);
+        }
       });
     });
   }
 
   const mappedOptions = (Array.isArray(options) ? options : []).map((option) => {
     const name = option?.name;
-    const phones = name ? Array.from(votesByOption[name] || []) : [];
+    const voteMap = name ? votesByOption[name] : null;
+    const phones = voteMap ? Array.from(voteMap.keys()) : [];
     const matched = phones
-      .map((phone) => usersByPhone[phone])
-      .filter(Boolean)
-      .map((user) => ({
-        _id: user._id,
-        name: user.name,
-        phone: user.phone,
-      }));
+      .map((phone) => {
+        const user = usersByPhone[phone];
+        if (!user) {
+          return null;
+        }
+        return {
+          _id: user._id,
+          name: user.name,
+          phone: user.phone,
+          votedAt: voteMap.get(phone) || 0,
+        };
+      })
+      .filter(Boolean);
+    matched.sort((a, b) => (a.votedAt || 0) - (b.votedAt || 0));
     return { name, players: matched };
   });
 
-  return NextResponse.json({ options: mappedOptions });
+  return NextResponse.json({ pollName, options: mappedOptions });
 }
