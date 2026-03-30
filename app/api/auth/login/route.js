@@ -16,9 +16,12 @@ function buildMagicLink(token) {
 export async function POST(request) {
   await connectDb();
   const payload = await request.json();
-  const user = await User.findOne({ phone: payload.phone });
+  if (payload.phone.length < 9) {
+    return NextResponse.json({ error: "Teléfono incorrecto" }, { status: 401 });
+  }
+  const user = await User.findOne({ phone: { $regex: `${payload.phone}$` } });
   if (!user) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json({ error: "Teléfono incorrecto" }, { status: 401 });
   }
   if (user.status !== "active") {
     return NextResponse.json({ error: "User pending" }, { status: 403 });
