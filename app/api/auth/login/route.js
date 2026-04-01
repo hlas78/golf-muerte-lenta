@@ -46,10 +46,10 @@ export async function POST(request) {
       user.magicTokenCreatedAt = new Date();
       await user.save();
       const link = buildMagicLink(user.magicToken);
-      await sendMessage(
-        user.phone,
-        `Hola ${user.name || ""}.\n\nParece que tu contraseña no coincidió. Aquí tienes una liga para entrar sin contraseña:\n${link}\n\nSi no intentaste iniciar sesión, ignora este mensaje.`
-      );
+      const message = wantsMagicLink
+        ? `Hola ${user.name || ""}.\n\nAquí tienes tu liga para entrar:\n${link}\n\nSi no intentaste iniciar sesión, ignora este mensaje.`
+        : `Hola ${user.name || ""}.\n\nParece que tu contraseña no coincidió. Aquí tienes una liga para entrar sin contraseña:\n${link}\n\nSi no intentaste iniciar sesión, ignora este mensaje.`;
+      await sendMessage(user.phone, message);
     }
     if (wantsMagicLink) {
       return NextResponse.json(
