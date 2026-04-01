@@ -16,6 +16,8 @@ function buildMagicLink(token) {
 export async function POST(request) {
   await connectDb();
   const payload = await request.json();
+  const wantsMagicLink =
+    !payload.password || String(payload.password).trim().length === 0;
   if (payload.phone.length < 9) {
     return NextResponse.json({ error: "Teléfono incorrecto" }, { status: 401 });
   }
@@ -26,7 +28,9 @@ export async function POST(request) {
   if (user.status !== "active") {
     return NextResponse.json({ error: "User pending" }, { status: 403 });
   }
-  const ok = await verifyPassword(payload.password, user.passwordHash);
+  const ok = wantsMagicLink
+    ? false
+    : await verifyPassword(payload.password, user.passwordHash);
   if (!ok) {
     const oneHourMs = 60 * 60 * 1000;
     const lastSentAt = user.magicTokenCreatedAt
@@ -47,7 +51,19 @@ export async function POST(request) {
         `Hola ${user.name || ""}.\n\nParece que tu contraseña no coincidió. Aquí tienes una liga para entrar sin contraseña:\n${link}\n\nSi no intentaste iniciar sesión, ignora este mensaje.`
       );
     }
-    return NextResponse.json({ error: "Contraseña incorrecta. Te enviamos una luga por whatsapp para ingresar" }, { status: 401 });
+    if (wantsMagicLink) {
+      return NextResponse.json(
+        { error: "Te enviamos una liga por WhatsApp para ingresar." },
+        { status: 401 }
+      );
+    }
+    return NextResponse.json(
+      {
+        error:
+          "Contraseña incorrecta. Te enviamos una liga por WhatsApp para ingresar",
+      },
+      { status: 401 }
+    );
   }
   const token = signToken({ id: user._id, role: user.role });
   const response = NextResponse.json({ ok: true });

@@ -35,6 +35,25 @@ const toLocalDateTimeValue = (date) => {
   ].join("T");
 };
 
+const getNextWeekdayDate = (weekday) => {
+  const today = new Date();
+  const current = today.getDay();
+  let daysAhead = (weekday - current + 7) % 7;
+  if (daysAhead === 0) {
+    daysAhead = 7;
+  }
+  const next = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + daysAhead,
+    7,
+    0,
+    0,
+    0
+  );
+  return next;
+};
+
 export default function NewRoundPage() {
   const router = useRouter();
   const [role, setRole] = useState("");
@@ -121,6 +140,17 @@ export default function NewRoundPage() {
       .then((data) => setUsers(Array.isArray(data) ? data : []))
       .catch(() => setUsers([]));
   }, []);
+
+  const applyPollOptionDate = (optionName) => {
+    const normalized = String(optionName || "").toLowerCase();
+    if (normalized.includes("sabado") || normalized.includes("sábado")) {
+      setStartedAt(toLocalDateTimeValue(getNextWeekdayDate(6)));
+      return;
+    }
+    if (normalized.includes("domingo")) {
+      setStartedAt(toLocalDateTimeValue(getNextWeekdayDate(0)));
+    }
+  };
 
 
   const courseOptions = courses.map((course) => ({
@@ -396,9 +426,7 @@ export default function NewRoundPage() {
 
   const openPoll = () => {
     setPollOpen(true);
-    if (!pollData) {
-      loadPoll();
-    }
+    loadPoll();
   };
 
   const autoAssignGroups = (incomingIds) => {
@@ -893,6 +921,7 @@ export default function NewRoundPage() {
       return Array.from(set);
     });
     autoAssignGroups(newIds);
+    applyPollOptionDate(optionName);
     setPollOpen(false);
   };
 
@@ -1349,7 +1378,11 @@ export default function NewRoundPage() {
         <Modal
           opened={pollOpen}
           onClose={() => setPollOpen(false)}
-          title={pollData?.pollName || "Encuesta"}
+          title={
+            <Text fw={700} size="sm">
+              {pollData?.pollName || "Encuesta"}
+            </Text>
+          }
           centered
         >
           {pollLoading ? (
@@ -1365,57 +1398,71 @@ export default function NewRoundPage() {
               const name = option?.name;
               const matched = option?.players || [];
               return (
-                <Card key={name} withBorder mb="sm">
-                  <Group justify="space-between" align="center" mb="xs">
-                    <Text fw={600}>{name}</Text>
-                    <Button
-                      size="xs"
-                      variant="light"
-                      onClick={() => addPlayersFromOption(name)}
-                      disabled={matched.length === 0}
-                    >
-                      Agregar jugadores
-                    </Button>
-                  </Group>
-                  <Accordion
-                    variant="contained"
-                    radius="md"
-                    chevronPosition="right"
-                  >
-                    <Accordion.Item value={`poll-${name}`}>
-                      <Accordion.Control>
-                        {matched.length === 0
-                          ? "Sin jugadores"
-                          : `${matched.length} jugador${
-                              matched.length === 1 ? "" : "es"
-                            }`}
-                      </Accordion.Control>
-                      <Accordion.Panel>
-                        {matched.length === 0 ? (
-                          <Text size="sm" c="dusk.6">
-                            No hay jugadores para esta opción.
+                <Accordion
+                  key={name}
+                  variant="contained"
+                  radius="md"
+                  chevronPosition="right"
+                  mb="sm"
+                >
+                  <Accordion.Item value={`poll-${name}`}>
+                    <Accordion.Control>
+                      <Group justify="space-between" align="center" wrap="nowrap">
+                        <div>
+                          <Text fw={600}>{name}</Text>
+                          <Text size="xs" c="dusk.6">
+                            {matched.length} jugador
+                            {matched.length === 1 ? "" : "es"}
                           </Text>
-                        ) : (
-                          <Stack gap={6}>
-                            {matched.map((player) => {
-                              const votedAt = player.votedAt
-                                ? new Date(player.votedAt)
-                                : null;
-                              const formatted = votedAt
-                                ? votedAt.toLocaleString()
-                                : "Sin fecha";
-                              return (
-                                <Text key={player._id} size="sm">
-                                  {player.name} · {formatted}
-                                </Text>
-                              );
-                            })}
-                          </Stack>
-                        )}
-                      </Accordion.Panel>
-                    </Accordion.Item>
-                  </Accordion>
-                </Card>
+                        </div>
+                        <Button
+                          component="div"
+                          role="button"
+                          tabIndex={0}
+                          size="xs"
+                          variant="light"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            addPlayersFromOption(name);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              addPlayersFromOption(name);
+                            }
+                          }}
+                          disabled={matched.length === 0}
+                        >
+                          Agregar
+                        </Button>
+                      </Group>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      {matched.length === 0 ? (
+                        <Text size="sm" c="dusk.6">
+                          No hay jugadores para esta opción.
+                        </Text>
+                      ) : (
+                        <Stack gap={6}>
+                          {matched.map((player) => {
+                            const votedAt = player.votedAt
+                              ? new Date(player.votedAt)
+                              : null;
+                            const formatted = votedAt
+                              ? votedAt.toLocaleString()
+                              : "Sin fecha";
+                            return (
+                              <Text key={player._id} size="sm">
+                                {player.name} · {formatted}
+                              </Text>
+                            );
+                          })}
+                        </Stack>
+                      )}
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                </Accordion>
               );
             })
           )}
