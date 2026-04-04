@@ -33,10 +33,10 @@ const PENALTY_LABELS = {
 };
 
 const ITEM_LABELS = {
-  holeWinner: "Ganador de hoyo",
+  holeWinner: "",
   medalFront: "Medal vuelta 1",
   medalBack: "Medal vuelta 2",
-  match: "Ganador de match",
+  match: "Match",
   sandyPar: "Sandy",
   birdie: "Birdie",
   eagle: "Aguila",
@@ -45,14 +45,14 @@ const ITEM_LABELS = {
   wetPar: "Wet par",
   ohYes: "Oh yes",
   culebra: "Culebra",
-  indFront: "Vuelta 1 (Raya)",
-  indBack: "Vuelta 2 (Raya)",
-  indRound: "Ronda 18 (Raya)",
-  indHole: "Hoyo ganado (Raya)",
-  indBirdie: "Birdie+ (Raya)",
-  indSandy: "Sandy (Raya)",
-  indWet: "Wet (Raya)",
-  indOhYes: "Oh yes (Raya)",
+  indFront: "Medal v1",
+  indBack: "Medal v2",
+  indRound: "Match",
+  indHole: "Hoyo",
+  indBirdie: "Birdie+",
+  indSandy: "Sandy",
+  indWet: "Wet",
+  indOhYes: "Oh yes",
 };
 
 const ITEM_ORDER = Object.keys(ITEM_LABELS);
@@ -1977,6 +1977,44 @@ export default function RoundDetailPage() {
                 (payment) =>
                   !GROUP_ITEMS.has(payment.item) && payment.item !== "culebra"
               );
+              const strokesByPlayerHole = scorecards.reduce((acc, card) => {
+                const playerId = card.player?._id?.toString();
+                if (!playerId) {
+                  return acc;
+                }
+                const holeStrokes = {};
+                (card.holes || []).forEach((hole) => {
+                  holeStrokes[hole.hole] = hole.strokes;
+                });
+                acc[playerId] = holeStrokes;
+                return acc;
+              }, {});
+              const netTotalsByPlayer = scorecards.reduce((acc, card) => {
+                const playerId = card.player?._id?.toString();
+                if (!playerId) {
+                  return acc;
+                }
+                const strokesMap = advantageStrokesByPlayer[playerId] || {};
+                const frontEnd = Math.min(round?.holes || 18, 9);
+                const getNetForRange = (start, end) => {
+                  let total = 0;
+                  for (let hole = start; hole <= end; hole += 1) {
+                    const entry = card.holes?.find((item) => item.hole === hole);
+                    const strokes = entry?.strokes || 0;
+                    total += strokes - (strokesMap[hole] || 0);
+                  }
+                  return total;
+                };
+                acc[playerId] = {
+                  front: getNetForRange(1, frontEnd),
+                  back:
+                    (round?.holes || 18) > 9
+                      ? getNetForRange(10, round?.holes || 18)
+                      : null,
+                  match: getNetForRange(1, round?.holes || 18),
+                };
+                return acc;
+              }, {});
               const groupedIndividual = individualPayments.reduce(
                 (acc, payment) => {
                   const noteKey = payment.note ? `bet:${payment.note}` : null;
@@ -2013,12 +2051,41 @@ export default function RoundDetailPage() {
                 if (wins.length === 0 && losses.length === 0) {
                   return null;
                 }
+                const groupedWins = wins.reduce((acc, payment) => {
+                  const label = ITEM_LABELS[payment.item] || payment.item;
+                  const holeLabel = payment.hole ? `Hoyo ${payment.hole}` : "";
+                  const key = `${label}${holeLabel ? ` ${holeLabel}` : ""}`;
+                  if (!acc[key]) {
+                    acc[key] = { amount: 0, extra: "" };
+                  }
+                  acc[key].amount += payment.amount;
+                  if (payment.item === "holeWinner" && payment.hole) {
+                    const strokes =
+                      strokesByPlayerHole?.[playerId]?.[payment.hole];
+                    if (Number.isFinite(strokes)) {
+                      acc[key].extra = `· ${strokes} golpes`;
+                    }
+                  }
+                  if (
+                    ["medalFront", "medalBack", "match"].includes(payment.item)
+                  ) {
+                    const netTotals = netTotalsByPlayer[playerId];
+                    const net =
+                      payment.item === "medalFront"
+                        ? netTotals?.front
+                        : payment.item === "medalBack"
+                          ? netTotals?.back
+                          : netTotals?.match;
+                    if (Number.isFinite(net)) {
+                      acc[key].extra = `· Net ${net}`;
+                    }
+                  }
+                  return acc;
+                }, {});
                 return (
                   <div key={`${playerId}-block`}>
-                    {wins.map((payment, idx) => {
-                      const rivalId = String(payment.from);
-                      const rival = getPlayerName(rivalId);
-                      const label = ITEM_LABELS[payment.item] || payment.item;
+                    {Object.entries(groupedWins).map(([label, entry], idx) => {
+                      const extra = entry.extra ? ` ${entry.extra}` : "";
                       return (
                         <Group key={`${playerId}-win-${idx}`} mb="xs">
                           <Badge color="club" variant="light">
@@ -2026,11 +2093,10 @@ export default function RoundDetailPage() {
                           </Badge>
                           <Text size="sm">
                             {label}
-                            {payment.hole ? ` · Hoyo ${payment.hole}` : ""}
-                            {rival ? ` · vs ${rival}` : ""}
+                            {extra}
                           </Text>
                           <Text size="sm" c="club.7">
-                            +${payment.amount}
+                            +${entry.amount}
                           </Text>
                         </Group>
                       );
