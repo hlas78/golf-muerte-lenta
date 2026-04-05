@@ -10,6 +10,7 @@ import {
   Modal,
   Select,
   Stack,
+  Switch,
   Table,
   Text,
   Textarea,
@@ -372,6 +373,7 @@ export default function NewRoundPage() {
     id: `bet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     playerA: "",
     playerB: "",
+    accumulateOnTie: false,
       amounts: {
         front: 0,
         back: 0,
@@ -931,7 +933,11 @@ export default function NewRoundPage() {
   };
 
   const editBet = (bet) => {
-    setBetDraft({ ...bet, amounts: { ...bet.amounts } });
+    setBetDraft({
+      ...bet,
+      accumulateOnTie: Boolean(bet.accumulateOnTie),
+      amounts: { ...bet.amounts },
+    });
     setBetModalOpen(true);
   };
 
@@ -1334,6 +1340,17 @@ export default function NewRoundPage() {
                   }
                 />
               </Group>
+              <Switch
+                mt="xs"
+                label="Acumular en empate / sin ganador (solo por hoyo)"
+                checked={Boolean(betDraft?.accumulateOnTie)}
+                onChange={(event) =>
+                  setBetDraft((prev) => ({
+                    ...prev,
+                    accumulateOnTie: event.currentTarget.checked,
+                  }))
+                }
+              />
               <Group mt="md">
                 <Text size="xs" c="dusk.6">
                   Predefinir montos:

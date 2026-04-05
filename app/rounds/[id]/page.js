@@ -284,6 +284,7 @@ export default function RoundDetailPage() {
     id: `bet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     playerA: "",
     playerB: "",
+    accumulateOnTie: false,
     amounts: {
       front: 0,
       back: 0,
@@ -302,7 +303,11 @@ export default function RoundDetailPage() {
   };
 
   const editBet = (bet) => {
-    setBetDraft({ ...bet, amounts: { ...bet.amounts } });
+    setBetDraft({
+      ...bet,
+      accumulateOnTie: Boolean(bet.accumulateOnTie),
+      amounts: { ...bet.amounts },
+    });
     setBetEditOpen(true);
   };
 
@@ -2125,8 +2130,8 @@ export default function RoundDetailPage() {
                 );
               };
 
-              const renderBlock = (title, blockPayments, blockPlayers) => (
-                <Card key={title} withBorder mb="md">
+              const renderBlock = (title, blockPayments, blockPlayers, keyId) => (
+                <Card key={keyId || title} withBorder mb="md">
                   <Text fw={700} mb="sm">
                     {title}
                   </Text>
@@ -2188,7 +2193,7 @@ export default function RoundDetailPage() {
                       ? betLabelById[key.replace("bet:", "")] ||
                         "Raya individual"
                       : "Raya individual";
-                    return renderBlock(title, blockPayments, playersInBlock);
+                    return renderBlock(title, blockPayments, playersInBlock, key);
                   })}
                 </>
               );
@@ -2592,6 +2597,17 @@ export default function RoundDetailPage() {
             }
           />
         </Group>
+        <Switch
+          mt="xs"
+          label="Acumular en empate / sin ganador (solo por hoyo)"
+          checked={Boolean(betDraft?.accumulateOnTie)}
+          onChange={(event) =>
+            setBetDraft((prev) => ({
+              ...prev,
+              accumulateOnTie: event.currentTarget.checked,
+            }))
+          }
+        />
         <Group justify="flex-end" mt="md">
           <Button variant="light" onClick={() => setBetEditOpen(false)}>
             Cancelar

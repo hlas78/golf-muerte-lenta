@@ -192,7 +192,16 @@ export async function POST(request) {
           });
         }
 
-        for (const hole of scorecard.holes || []) {
+        const holesToUpload = (scorecard.holes || []).filter(
+          (hole) => hole?.hole != null && hole.strokes != null && hole.strokes !== ""
+        );
+        const puttsComplete =
+          holesToUpload.length > 0 &&
+          holesToUpload.every(
+            (hole) => hole.putts != null && hole.putts !== ""
+          );
+
+        for (const hole of holesToUpload) {
           const holeNumber = hole.hole;
           if (holeNumber == null) {
             continue;
@@ -203,22 +212,27 @@ export async function POST(request) {
               await input.fill(String(hole.strokes));
             }
           }
-          if (hole.putts != null) {
+          if (puttsComplete && hole.putts != null) {
             const input = page.locator(`input[name="ptH${holeNumber}"]`);
             if (await input.count()) {
               await input.fill(String(hole.putts));
             }
           }
         }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         if (Boolean(process.env.GRINT_UPLOAD_PRIVATE_PRACTICE)) {
+          console.log('Marca como privada...')
           await page.locator("#practice_score").setChecked(true);
           await page.locator("#private_score").setChecked(true);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-
+        console.log('Aceptando tarjeta...')        
         await Promise.all([
           // page.waitForURL("https://thegrint.com/score/add_full_score", { timeout: 20000 }),
           page.locator("a.tg-button-submit.submit").click(),
         ]);
+        console.log('Botón tarjeta OK presionado')
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       },
       { headless: false, keepOpen }
     );

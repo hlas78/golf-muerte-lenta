@@ -61,6 +61,8 @@ export default function RecordScorecardPage() {
   const [grintScores, setGrintScores] = useState([]);
   const [grintLoading, setGrintLoading] = useState(false);
   const [grintImporting, setGrintImporting] = useState(false);
+  const [activeScorecardId, setActiveScorecardId] = useState(null);
+  const [reopeningScorecard, setReopeningScorecard] = useState(false);
   const saveTimeout = useRef(null);
   const initialized = useRef(false);
   const loadedExisting = useRef(false);
@@ -203,6 +205,7 @@ export default function RecordScorecardPage() {
               (card) => String(card.player?._id) === String(targetId)
             )
           : null;
+        setActiveScorecardId(existing?._id ? String(existing._id) : null);
         if (existing?.holes?.length) {
           const isAdmin = role === "admin";
           if (existing.accepted && isAdmin && !roundClosed) {
@@ -595,6 +598,32 @@ export default function RecordScorecardPage() {
     }
   };
 
+  const handleReopenScorecard = async () => {
+    if (!activeScorecardId || !round?._id) {
+      return;
+    }
+    setReopeningScorecard(true);
+    try {
+      const res = await fetch(
+        `/api/rounds/${params.id}/scorecards/${activeScorecardId}/reopen`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        throw new Error("No se pudo reabrir la tarjeta.");
+      }
+      setLocked(false);
+      loadScorecards();
+    } catch (error) {
+      notifications.show({
+        title: "Error al reabrir",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    } finally {
+      setReopeningScorecard(false);
+    }
+  };
+
   const applyStrokePreset = (index, preset) => {
     const par = holeMeta[holes[index]?.hole]?.par;
     if (!par) {
@@ -956,6 +985,16 @@ export default function RecordScorecardPage() {
             disabled={!canEditTee || updatingTee}
           />
           <Group justify="flex-end" mt="xs">
+            {locked && me?.phone === "5214421705639" ? (
+              <Button
+                variant="light"
+                color="clay"
+                loading={reopeningScorecard}
+                onClick={handleReopenScorecard}
+              >
+                Reabrir tarjeta
+              </Button>
+            ) : null}
             {!locked && !roundClosed ? (
               <Button variant="light" onClick={openGrintModal}>
                 Cargar desde Grint

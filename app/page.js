@@ -268,7 +268,7 @@ export default function Home() {
                     </Text>
                   ) : null}
                   <Text size="sm" c="dusk.6">
-                    {formatRoundDate(round.createdAt)}
+                    {formatRoundDate(round.startedAt || round.createdAt)}
                   </Text>
                 </Card>
               ))
