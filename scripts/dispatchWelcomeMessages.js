@@ -19,9 +19,10 @@ function buildRecordLink(roundId, token) {
 async function run() {
   await connectDb();
   const now = new Date();
+  const windowEnd = new Date(now.getTime() + 10 * 60 * 1000);
   const rounds = await Round.find({
     status: { $ne: "closed" },
-    startedAt: { $lte: now },
+    startedAt: { $lte: windowEnd },
   });
 
   for (const round of rounds) {
