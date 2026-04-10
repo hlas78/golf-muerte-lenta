@@ -450,6 +450,24 @@ export default function NewRoundPage() {
       (Array.isArray(getUser(id)?.enemies) ? getUser(id).enemies : []).map(
         (entry) => String(entry)
       );
+    const getTeeName = (id) => {
+      const explicit = playerTees[String(id)];
+      if (explicit) {
+        return explicit;
+      }
+      const preferred = String(getUser(id)?.defaultTeeName || "").toUpperCase();
+      return preferred || defaultTeeName || "";
+    };
+    const normalizeTeeGroup = (teeName) => {
+      const normalized = String(teeName || "").trim().toUpperCase();
+      if (["DORADAS", "PLATEADAS"].includes(normalized)) {
+        return "DORADAS_PLATEADAS";
+      }
+      if (["BLANCAS", "AZULES"].includes(normalized)) {
+        return "BLANCAS_AZULES";
+      }
+      return normalized;
+    };
 
     const allIdSet = new Set(allIds.map((id) => String(id)));
     const existingGroups = Object.entries(playerGroups).reduce(
@@ -596,14 +614,30 @@ export default function NewRoundPage() {
         totals.length
       );
     };
-    const scoreAdd = (groupIndex, clusterHandicap) => {
+    const scoreAdd = (groupIndex, clusterHandicap, clusterTee) => {
       const totals = groups.map((group, idx) =>
         idx === groupIndex ? group.handicap + clusterHandicap : group.handicap
       );
       const varScore = variance(totals);
       const maxMin = Math.max(...totals) - Math.min(...totals);
       const diffScore = Math.abs(totals[groupIndex] - avgHandicap);
-      return maxMin * 0.45 + varScore * 0.35 + diffScore * 0.2;
+      let teePenalty = 0;
+      if (clusterTee) {
+        const group = groups[groupIndex];
+        const groupTees = group.members.map((id) =>
+          normalizeTeeGroup(getTeeName(id))
+        );
+        const normalizedClusterTee = normalizeTeeGroup(clusterTee);
+        if (groupTees.length > 0) {
+          const hasDifferent = groupTees.some(
+            (tee) => tee && tee !== normalizedClusterTee
+          );
+          if (hasDifferent) {
+            teePenalty = 500;
+          }
+        }
+      }
+      return maxMin * 0.45 + varScore * 0.35 + diffScore * 0.2 + teePenalty;
     };
 
     const unassignedClusters = clusters
@@ -612,6 +646,16 @@ export default function NewRoundPage() {
         ids: cluster,
         handicap: cluster.reduce((sum, id) => sum + getHandicap(id), 0),
         carts: cluster.reduce((sum, id) => sum + (hasCart(id) ? 1 : 0), 0),
+        tee: (() => {
+          const tees = Array.from(
+            new Set(
+              cluster
+                .map((id) => normalizeTeeGroup(getTeeName(id)))
+                .filter(Boolean)
+            )
+          );
+          return tees.length === 1 ? tees[0] : null;
+        })(),
       }))
       .sort((a, b) => b.handicap - a.handicap);
 
@@ -619,6 +663,7 @@ export default function NewRoundPage() {
       const clusterSize = cluster.ids.length;
       const clusterHandicap = cluster.handicap;
       const clusterCarts = cluster.carts;
+      const clusterTee = cluster.tee;
       const preferredGroup = cluster.ids
         .map((id) => existingGroups[String(id)])
         .find(Boolean);
@@ -665,10 +710,10 @@ export default function NewRoundPage() {
 
       candidates.sort((a, b) => {
         const scoreA =
-          scoreAdd(a.idx, clusterHandicap) +
+          scoreAdd(a.idx, clusterHandicap, clusterTee) +
           (a.group.carts < 2 && clusterCarts === 0 ? 100 : 0);
         const scoreB =
-          scoreAdd(b.idx, clusterHandicap) +
+          scoreAdd(b.idx, clusterHandicap, clusterTee) +
           (b.group.carts < 2 && clusterCarts === 0 ? 100 : 0);
         return scoreA - scoreB;
       });

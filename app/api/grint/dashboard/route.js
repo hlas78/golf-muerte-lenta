@@ -94,7 +94,9 @@ export async function GET(request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const payload = verifyToken(token);
-  const user = await User.findById(payload.id).select("-passwordHash");
+  const user = await User.findById(payload.id).select(
+    "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+  );
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

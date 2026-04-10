@@ -8,7 +8,42 @@ const handle = app.getRequestHandler();
 const port = parseInt(process.env.PORT, 10) || 3000;
 
 app.prepare().then(() => {
-  const httpServer = createServer((req, res) => handle(req, res));
+  const logRequestTiming = (req, res) => {
+    const start = process.hrtime.bigint();
+    let bytes = 0;
+    const originalWrite = res.write.bind(res);
+    const originalEnd = res.end.bind(res);
+    res.write = (chunk, encoding, cb) => {
+      if (chunk) {
+        bytes += Buffer.isBuffer(chunk)
+          ? chunk.length
+          : Buffer.byteLength(chunk, encoding);
+      }
+      return originalWrite(chunk, encoding, cb);
+    };
+    res.end = (chunk, encoding, cb) => {
+      if (chunk) {
+        bytes += Buffer.isBuffer(chunk)
+          ? chunk.length
+          : Buffer.byteLength(chunk, encoding);
+      }
+      return originalEnd(chunk, encoding, cb);
+    };
+    res.on("finish", () => {
+      const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+      // eslint-disable-next-line no-console
+      console.log(
+        `[http] ${req.method} ${req.url} ${res.statusCode} ${durationMs.toFixed(
+          1
+        )}ms ${bytes}b`
+      );
+    });
+  };
+
+  const httpServer = createServer((req, res) => {
+    logRequestTiming(req, res);
+    return handle(req, res);
+  });
   const io = new Server(httpServer, {
     path: "/socket",
     cors: {

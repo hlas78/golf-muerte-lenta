@@ -22,14 +22,20 @@ export async function GET(request, { params }) {
 
   const { id } = await params;
   const round = await Round.findById(id)
-    .populate("players", "-passwordHash")
+    .populate(
+      "players",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
     .lean();
   if (!round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
 
   const scorecards = await Scorecard.find({ round: round._id })
-    .populate("player", "-passwordHash")
+    .populate(
+      "player",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
     .lean();
   const payments = await Payment.find({ round: round._id }).lean();
 

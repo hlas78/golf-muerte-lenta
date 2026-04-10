@@ -35,7 +35,10 @@ export async function GET(request, { params }) {
   await connectDb();
   const { id } = await params;
   const scorecards = await Scorecard.find({ round: id })
-    .populate("player", "-passwordHash")
+    .populate(
+      "player",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
     .sort({ createdAt: 1 });
   const allAccepted =
     scorecards.length > 0 && scorecards.every((card) => card.accepted);
@@ -154,7 +157,10 @@ export async function POST(request, { params }) {
           player: { $ne: player._id },
           "holes.hole": holeNumber,
           "holes.ohYes": true,
-        }).populate("player", "-passwordHash");
+        }).populate(
+          "player",
+          "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+        );
 
         if (existingOhYesCards.length === 0) {
           return;
@@ -437,7 +443,10 @@ export async function PUT(request, { params }) {
   }
 
   const scorecards = await Scorecard.find({ round: round._id })
-    .populate("player", "-passwordHash")
+    .populate(
+      "player",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
     .sort({ createdAt: 1 });
   const allAccepted =
     scorecards.length > 0 && scorecards.every((card) => card.accepted);

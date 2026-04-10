@@ -268,7 +268,10 @@ export async function POST(request, { params }) {
 
     const holeHandicapsByPlayer = {};
     const populatedScorecards = await Scorecard.find({ round: round._id })
-      .populate("player", "-passwordHash")
+      .populate(
+        "player",
+        "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      )
       .sort({ createdAt: 1 });
     populatedScorecards.forEach((card) => {
       const playerTee =
@@ -357,7 +360,10 @@ export async function POST(request, { params }) {
     })) || [];
 
   const populatedScorecards = await Scorecard.find({ round: round._id })
-    .populate("player", "-passwordHash")
+    .populate(
+      "player",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
     .sort({ createdAt: 1 });
   const holeHandicapsByPlayer = {};
   const courseHandicapByPlayer = {};

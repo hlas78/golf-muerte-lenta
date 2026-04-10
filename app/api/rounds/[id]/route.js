@@ -11,8 +11,14 @@ export async function GET(request, { params }) {
   await connectDb();
   const { id } = await params;
   const round = await Round.findById(id)
-    .populate("players", "-passwordHash")
-    .populate("supervisor", "-passwordHash");
+    .populate(
+      "players",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
+    .populate(
+      "supervisor",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    );
   if (!round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
@@ -72,7 +78,13 @@ export async function PATCH(request, { params }) {
   await round.save();
 
   const updated = await Round.findById(id)
-    .populate("players", "-passwordHash")
-    .populate("supervisor", "-passwordHash");
+    .populate(
+      "players",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
+    .populate(
+      "supervisor",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    );
   return NextResponse.json(updated);
 }

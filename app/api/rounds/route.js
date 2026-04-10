@@ -35,8 +35,14 @@ async function getConfigSnapshot() {
 export async function GET() {
   await connectDb();
   const rounds = await Round.find()
-    .populate("supervisor", "-passwordHash")
-    .populate("players", "-passwordHash")
+    .populate(
+      "supervisor",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
+    .populate(
+      "players",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
     .sort({ createdAt: -1 });
   return NextResponse.json(rounds);
 }

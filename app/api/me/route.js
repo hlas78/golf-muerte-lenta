@@ -13,7 +13,9 @@ export async function GET() {
   }
   try {
     const payload = verifyToken(token);
-    const user = await User.findById(payload.id).select("-passwordHash");
+    const user = await User.findById(payload.id).select(
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    );
     return NextResponse.json({ user });
   } catch (error) {
     return NextResponse.json({ user: null });
