@@ -15,7 +15,10 @@ const TEE_NAME_MAP = {
   GOLD: "DORADAS",
   SILVER: "PLATEADAS",
   RED: "ROJAS",
-  WWHITE: "BLANCASM"
+  WWHITE: "BLANCASM",
+  "W WHITE": "BLANCASM",
+  "W.WHITE": "BLANCASM",
+  "W-WHITE": "BLANCASM",
 };
 
 const RATING_NAME_MAP = {
@@ -25,7 +28,7 @@ const RATING_NAME_MAP = {
   DORADAS: "GOLD",
   PLATEADAS: "SILVER",
   ROJAS: "RED",
-  BLANCASM: "WWHITE"
+  BLANCASM: "WWHITE",
 };
 
 const toNumber = (value) => {
@@ -36,17 +39,29 @@ const toNumber = (value) => {
 const stripTags = (value) =>
   value.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 
+const normalizeTeeName = (value) =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+
 const parseRatings = (sectionHtml) => {
   const ratings = new Map();
   const normalized = stripTags(sectionHtml)
     .replace(/\s+/g, " ")
     .trim();
-  const pattern = /([A-Za-z]+)\s+([0-9.]+)\s*\/\s*([0-9.]+)%/g;
+  const pattern = /([A-Za-z]+)\s+([0-9.]+)\s*\/\s*([0-9.]+)\s*(%)?/g;
   let match = pattern.exec(normalized);
   while (match) {
+    const slopeValue = toNumber(match[3]);
+    const slopePercent = match[4]
+      ? slopeValue
+      : slopeValue != null
+        ? Number(((slopeValue / 113) * 100).toFixed(6))
+        : null;
     ratings.set(match[1].toUpperCase(), {
       course_rating: toNumber(match[2]),
-      slope_percent: toNumber(match[3]),
+      slope_percent: slopePercent,
     });
     match = pattern.exec(normalized);
   }
@@ -101,7 +116,7 @@ const parseSection = (sectionHtml, ratingsHtml) => {
     const rowHtml = teeMatch[2];
     const nameMatch = rowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/i);
     const teeNameRaw = nameMatch ? stripTags(nameMatch[1]) : null;
-    const teeNameUpper = teeNameRaw ? teeNameRaw.toUpperCase() : null;
+    const teeNameUpper = normalizeTeeName(teeNameRaw);
     const yardages = parseRowNumbers(rowHtml, { dropFirst: true }).slice(0, 18);
     if (teeNameUpper && yardages.length === 18) {
       teeRows.push({
@@ -119,7 +134,12 @@ const parseSection = (sectionHtml, ratingsHtml) => {
   };
 };
 
-const buildTee = ({ teeNameRaw, yardages }, indexValues, parValues, ratings) => {
+const buildTee = (
+  { teeNameRaw, yardages, teeNameOverride },
+  indexValues,
+  parValues,
+  ratings
+) => {
   const ratingKey = RATING_NAME_MAP[teeNameRaw] || teeNameRaw;
   const ratingInfo = ratings.get(ratingKey) || {};
   const slopePercent = ratingInfo.slope_percent;
@@ -142,7 +162,7 @@ const buildTee = ({ teeNameRaw, yardages }, indexValues, parValues, ratings) => 
   const backYards = yardages.slice(9, 18).reduce((sum, yard) => sum + yard, 0);
 
   return {
-    tee_name: TEE_NAME_MAP[teeNameRaw] || teeNameRaw,
+    tee_name: teeNameOverride || TEE_NAME_MAP[teeNameRaw] || teeNameRaw,
     course_rating: courseRating,
     slope_rating: slopeRating,
     bogey_rating: null,
@@ -205,7 +225,14 @@ const parseCourseHtml = (html) => {
     const section = parseSection(ladiesMatch[1], ladiesHeaderMatch?.[1]);
     if (section) {
       tees.female = section.teeRows
-        .filter((row) => (TEE_NAME_MAP[row.teeNameRaw] || row.teeNameRaw) === "ROJAS")
+        .map((row) => ({
+          ...row,
+          teeNameOverride:
+            row.teeNameRaw === "WHITE"
+              ? "BLANCASM"
+              : TEE_NAME_MAP[row.teeNameRaw] || row.teeNameRaw,
+        }))
+        .filter((row) => ["ROJAS", "BLANCASM"].includes(row.teeNameOverride))
         .map((row) =>
           buildTee(row, section.indexValues, section.parValues, section.ratings)
         );

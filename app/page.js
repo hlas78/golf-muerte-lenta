@@ -1,19 +1,73 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Badge, Button, Card, Group, Modal, Text } from "@mantine/core";
+import { useEffect, useMemo, useState } from "react";
+import { Badge, Button, Card, Group, Modal, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "./components/AppShell";
 import StatCard from "./components/StatCard";
 
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const toDateInputValue = (date) => {
+  if (!date) {
+    return "";
+  }
+  const next = new Date(date);
+  if (Number.isNaN(next.getTime())) {
+    return "";
+  }
+  return `${next.getFullYear()}-${pad2(next.getMonth() + 1)}-${pad2(
+    next.getDate()
+  )}`;
+};
+
+const getDefaultClosedRange = () => {
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(start.getDate() - 14);
+  return {
+    start: toDateInputValue(start),
+    end: toDateInputValue(today),
+  };
+};
+
+const getRoundDate = (round) => round?.startedAt || round?.createdAt;
+
+const isRoundInDateRange = (round, startDate, endDate) => {
+  const value = getRoundDate(round);
+  if (!value) {
+    return false;
+  }
+  const roundDate = new Date(value);
+  if (Number.isNaN(roundDate.getTime())) {
+    return false;
+  }
+  if (startDate) {
+    const start = new Date(`${startDate}T00:00:00`);
+    if (!Number.isNaN(start.getTime()) && roundDate < start) {
+      return false;
+    }
+  }
+  if (endDate) {
+    const end = new Date(`${endDate}T23:59:59.999`);
+    if (!Number.isNaN(end.getTime()) && roundDate > end) {
+      return false;
+    }
+  }
+  return true;
+};
+
 export default function Home() {
+  const defaultClosedRange = useMemo(() => getDefaultClosedRange(), []);
   const [isAdmin, setIsAdmin] = useState(false);
   const [role, setRole] = useState("");
   const [rounds, setRounds] = useState([]);
   const [importOpen, setImportOpen] = useState(false);
   const [importingRound, setImportingRound] = useState(false);
   const [importFile, setImportFile] = useState(null);
+  const [closedStartDate, setClosedStartDate] = useState(defaultClosedRange.start);
+  const [closedEndDate, setClosedEndDate] = useState(defaultClosedRange.end);
 
   useEffect(() => {
     fetch("/api/me")
@@ -38,7 +92,10 @@ export default function Home() {
   const openRounds = rounds.filter(
     (round) => round.status === "open" || round.status === "active"
   );
-  const closedRounds = rounds.filter((round) => round.status === "closed");
+  const allClosedRounds = rounds.filter((round) => round.status === "closed");
+  const closedRounds = allClosedRounds.filter((round) =>
+    isRoundInDateRange(round, closedStartDate, closedEndDate)
+  );
   const formatRoundDate = (value) => {
     if (!value) {
       return "Sin fecha";
@@ -227,16 +284,35 @@ export default function Home() {
         </section>
 
         <section style={{ marginTop: "2rem" }}>
-          <Group justify="space-between" mb="md">
-            <Text fw={700} c="clay.7">Jugadas cerradas</Text>
-            <Text size="sm" c="dusk.6">
-              {closedRounds.length} cerradas
-            </Text>
+          <Group justify="space-between" align="end" mb="md">
+            <div>
+              <Text fw={700} c="clay.7">Jugadas cerradas</Text>
+            </div>
+            <Group gap="sm" align="end">
+              <TextInput
+                label="Desde"
+                type="date"
+                size="xs"
+                value={closedStartDate}
+                onChange={(event) =>
+                  setClosedStartDate(event.currentTarget.value)
+                }
+              />
+              <TextInput
+                label="Hasta"
+                type="date"
+                size="xs"
+                value={closedEndDate}
+                onChange={(event) =>
+                  setClosedEndDate(event.currentTarget.value)
+                }
+              />
+            </Group>
           </Group>
           <div className="gml-card-grid">
             {closedRounds.length === 0 ? (
               <Text size="sm" c="dusk.6">
-                No hay jugadas cerradas.
+                No hay jugadas cerradas en este rango.
               </Text>
             ) : (
               closedRounds.map((round) => (

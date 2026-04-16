@@ -538,12 +538,17 @@ export default function RoundDetailPage() {
     return items;
   }, [scorecards]);
 
+  const groupBetsConfig = useMemo(() => {
+    const snapshot = round?.configSnapshot || {};
+    return snapshot.bets || snapshot || {};
+  }, [round?.configSnapshot]);
+
   const winningCells = useMemo(() => {
     if (!Array.isArray(summary?.payments)) {
       return {};
     }
     return summary.payments.reduce((acc, payment) => {
-      if (!payment.hole) {
+      if (!payment.hole || !GROUP_ITEMS.has(payment.item)) {
         return acc;
       }
       const playerId = String(payment.to);
@@ -630,7 +635,11 @@ export default function RoundDetailPage() {
   }, [scorecards, round, minCourseHandicap]);
 
   const liveWinningCells = useMemo(() => {
-    if (!scorecards.length || !round?.holes) {
+    if (
+      !scorecards.length ||
+      !round?.holes ||
+      !(Number(groupBetsConfig?.holeWinner) > 0)
+    ) {
       return {};
     }
     const winners = {};
@@ -664,7 +673,7 @@ export default function RoundDetailPage() {
       }
     }
     return winners;
-  }, [scorecards, round, advantageStrokesByPlayer]);
+  }, [scorecards, round, advantageStrokesByPlayer, groupBetsConfig]);
 
   const liveBonusCells = useMemo(() => {
     if (!scorecards.length || !round?.holes) {
@@ -691,15 +700,24 @@ export default function RoundDetailPage() {
             : null;
         const isBirdieOrBetter = diff != null && diff <= -1;
         const isSandyParOrBetter =
-          entry.sandy && diff != null && diff <= 0;
-        const isWetParOrBetter = entry.water && diff != null && diff <= 0;
+          Number(groupBetsConfig?.sandyPar) > 0 &&
+          entry.sandy &&
+          diff != null &&
+          diff <= 0;
+        const isWetParOrBetter =
+          Number(groupBetsConfig?.wetPar) > 0 &&
+          entry.water &&
+          diff != null &&
+          diff <= 0;
         const isHoleOut =
+          Number(groupBetsConfig?.holeOut) > 0 &&
           entry.putts === 0 &&
           ((entry.holeOut && Number.isFinite(strokes)) ||
             (diff != null && diff <= 0));
-        const isOhYes = par === 3 && entry.ohYes;
+        const isOhYes =
+          Number(groupBetsConfig?.ohYes) > 0 && par === 3 && entry.ohYes;
         if (
-          isBirdieOrBetter ||
+          (Number(groupBetsConfig?.birdie) > 0 && isBirdieOrBetter) ||
           isSandyParOrBetter ||
           isWetParOrBetter ||
           isHoleOut ||
@@ -713,7 +731,7 @@ export default function RoundDetailPage() {
       });
     });
     return bonuses;
-  }, [scorecards, round, holeMeta]);
+  }, [scorecards, round, holeMeta, groupBetsConfig]);
 
   const courseHandicapByPlayer = useMemo(() => {
     if (!scorecards.length) {
@@ -758,6 +776,9 @@ export default function RoundDetailPage() {
   const winningTotals = useMemo(() => {
     if (Array.isArray(summary?.payments)) {
       return summary.payments.reduce((acc, payment) => {
+        if (!GROUP_ITEMS.has(payment.item)) {
+          return acc;
+        }
         const playerId = String(payment.to);
         if (!acc[playerId]) {
           acc[playerId] = new Set();
@@ -2057,9 +2078,9 @@ export default function RoundDetailPage() {
                   return null;
                 }
                 const groupedWins = wins.reduce((acc, payment) => {
-                  const label = ITEM_LABELS[payment.item] || payment.item;
+                  const label = ITEM_LABELS[payment.item] || "";
                   const holeLabel = payment.hole ? `Hoyo ${payment.hole}` : "";
-                  const key = `${label}${holeLabel ? ` ${holeLabel}` : ""}`;
+                  const key = `${label} ${holeLabel ? ` ${holeLabel}` : ""}`;
                   if (!acc[key]) {
                     acc[key] = { amount: 0, extra: "" };
                   }
@@ -2109,7 +2130,7 @@ export default function RoundDetailPage() {
                     {losses.map((payment, idx) => {
                       const rivalId = String(payment.to);
                       const rival = getPlayerName(rivalId);
-                      const label = ITEM_LABELS[payment.item] || payment.item;
+                      const label = ITEM_LABELS[payment.item] || "";
                       return (
                         <Group key={`${playerId}-loss-${idx}`} mb="xs">
                           <Badge color="clay" variant="light">
@@ -2117,8 +2138,8 @@ export default function RoundDetailPage() {
                           </Badge>
                           <Text size="sm">
                             {label}
-                            {payment.hole ? ` · Hoyo ${payment.hole}` : ""}
-                            {rival ? ` · vs ${rival}` : ""}
+                            {payment.hole ? ` Hoyo ${payment.hole}` : ""}
+                            {rival ? ` vs ${rival}` : ""}
                           </Text>
                           <Text size="sm" c="clay.7">
                             -${payment.amount}

@@ -460,13 +460,32 @@ export default function NewRoundPage() {
     };
     const normalizeTeeGroup = (teeName) => {
       const normalized = String(teeName || "").trim().toUpperCase();
-      if (["DORADAS", "PLATEADAS"].includes(normalized)) {
+      if (["DORADA", "DORADAS", "PLATEADA", "PLATEADAS"].includes(normalized)) {
         return "DORADAS_PLATEADAS";
       }
-      if (["BLANCAS", "AZULES"].includes(normalized)) {
+      if (["BLANCA", "BLANCAS", "AZUL", "AZULES"].includes(normalized)) {
         return "BLANCAS_AZULES";
       }
       return normalized;
+    };
+    const getGroupTeeGroup = (group) => {
+      if (!group.members.length) {
+        return null;
+      }
+      const counts = group.members.reduce((acc, id) => {
+        const tee = normalizeTeeGroup(getTeeName(id));
+        if (!tee) {
+          return acc;
+        }
+        acc[tee] = (acc[tee] || 0) + 1;
+        return acc;
+      }, {});
+      const entries = Object.entries(counts);
+      if (!entries.length) {
+        return null;
+      }
+      entries.sort((a, b) => b[1] - a[1]);
+      return entries[0][0];
     };
 
     const allIdSet = new Set(allIds.map((id) => String(id)));
@@ -614,6 +633,25 @@ export default function NewRoundPage() {
         totals.length
       );
     };
+    const getMemberTeeGroups = (members) =>
+      members
+        .map((id) => normalizeTeeGroup(getTeeName(id)))
+        .filter(Boolean);
+    const teeMismatchPenaltyForTees = (tees) => {
+      if (!tees.length) return 0;
+      const counts = tees.reduce((acc, tee) => {
+        acc[tee] = (acc[tee] || 0) + 1;
+        return acc;
+      }, {});
+      const entries = Object.entries(counts);
+      if (!entries.length) return 0;
+      entries.sort((a, b) => b[1] - a[1]);
+      const dominant = entries[0][0];
+      const mismatches = tees.filter((tee) => tee !== dominant).length;
+      return mismatches * 200;
+    };
+    const teeMismatchPenalty = (group) =>
+      teeMismatchPenaltyForTees(getMemberTeeGroups(group.members));
     const scoreAdd = (groupIndex, clusterHandicap, clusterTee) => {
       const totals = groups.map((group, idx) =>
         idx === groupIndex ? group.handicap + clusterHandicap : group.handicap
@@ -624,20 +662,31 @@ export default function NewRoundPage() {
       let teePenalty = 0;
       if (clusterTee) {
         const group = groups[groupIndex];
-        const groupTees = group.members.map((id) =>
-          normalizeTeeGroup(getTeeName(id))
-        );
         const normalizedClusterTee = normalizeTeeGroup(clusterTee);
-        if (groupTees.length > 0) {
-          const hasDifferent = groupTees.some(
-            (tee) => tee && tee !== normalizedClusterTee
-          );
-          if (hasDifferent) {
-            teePenalty = 500;
-          }
+        const dominantTee = getGroupTeeGroup(group);
+        if (dominantTee && dominantTee !== normalizedClusterTee) {
+          teePenalty = 800;
+        } else if (dominantTee && dominantTee === normalizedClusterTee) {
+          teePenalty = -250;
         }
       }
-      return maxMin * 0.45 + varScore * 0.35 + diffScore * 0.2 + teePenalty;
+      const projectedPenalty = groups.reduce((sum, group, idx) => {
+        if (idx === groupIndex) {
+          const tees = getMemberTeeGroups(group.members);
+          if (clusterTee) {
+            tees.push(normalizeTeeGroup(clusterTee));
+          }
+          return sum + teeMismatchPenaltyForTees(tees.filter(Boolean));
+        }
+        return sum + teeMismatchPenalty(group);
+      }, 0);
+      return (
+        maxMin * 0.35 +
+        varScore * 0.3 +
+        diffScore * 0.15 +
+        teePenalty +
+        projectedPenalty
+      );
     };
 
     const unassignedClusters = clusters
@@ -683,6 +732,17 @@ export default function NewRoundPage() {
             ({ group }) =>
               group.members.length + clusterSize <= maxSize
           );
+      }
+
+      if (clusterTee) {
+        const normalizedClusterTee = normalizeTeeGroup(clusterTee);
+        const sameTeeCandidates = candidates.filter(({ group }) => {
+          const dominant = getGroupTeeGroup(group);
+          return dominant ? dominant === normalizedClusterTee : true;
+        });
+        if (sameTeeCandidates.length > 0) {
+          candidates = sameTeeCandidates;
+        }
       }
 
       if (preferredGroup) {
@@ -745,7 +805,16 @@ export default function NewRoundPage() {
 
     if (overfilled.length > 0 && underfilled.length > 0) {
       const tryMove = (fromGroup, toGroup) => {
-        const candidates = [...fromGroup.members].reverse();
+        const dominant = getGroupTeeGroup(toGroup);
+        const candidates = [...fromGroup.members]
+          .reverse()
+          .sort((a, b) => {
+            if (!dominant) return 0;
+            const aMatch = normalizeTeeGroup(getTeeName(a)) === dominant;
+            const bMatch = normalizeTeeGroup(getTeeName(b)) === dominant;
+            if (aMatch === bMatch) return 0;
+            return aMatch ? -1 : 1;
+          });
         for (const playerId of candidates) {
           const enemyConflict = hasEnemyConflict(toGroup, [playerId]);
           if (enemyConflict) {
@@ -798,7 +867,11 @@ export default function NewRoundPage() {
         totals.reduce((sum, value) => sum + (value - avg) ** 2, 0) /
         totals.length;
       const maxMin = Math.max(...totals) - Math.min(...totals);
-      return varScore + maxMin * 0.35;
+      const teePenalty = groups.reduce(
+        (sum, group) => sum + teeMismatchPenalty(group),
+        0
+      );
+      return varScore + maxMin * 0.35 + teePenalty;
     };
 
     const hasEnemyConflictWith = (members, playerId) =>
