@@ -480,6 +480,20 @@ export default function RoundDetailPage() {
   const canApprove = canManage;
   const isClosed = round?.status === "closed";
   const isAdmin = me?.role === "admin";
+  const canUploadAnyOwnGrint = useMemo(
+    () =>
+      Boolean(
+        me?._id &&
+          scorecards.some(
+            (card) =>
+              card.accepted &&
+              !card.grintUploadedAt &&
+              String(card.player?._id) === String(me._id)
+          )
+      ),
+    [me?._id, scorecards]
+  );
+  const showActionColumn = canApprove || canUploadAnyOwnGrint;
   const roundStartAt = round?.startedAt || round?.createdAt;
   const roundStartLabel = loading
     ? "Cargando..."
@@ -1717,7 +1731,7 @@ export default function RoundDetailPage() {
                   <Table.Th>Total</Table.Th>
                   <Table.Th>Putts</Table.Th>
                   {/* <Table.Th>Estado</Table.Th> */}
-                  {canApprove ? <Table.Th>Accion</Table.Th> : null}
+                  {showActionColumn ? <Table.Th>Accion</Table.Th> : null}
                   <Table.Th>HC tee</Table.Th>
                 </Table.Tr>
                 <Table.Tr>
@@ -1731,7 +1745,7 @@ export default function RoundDetailPage() {
                   <Table.Th />
                   <Table.Th />
                   <Table.Th />
-                  {canApprove ? <Table.Th /> : null}
+                  {showActionColumn ? <Table.Th /> : null}
                   <Table.Th />
                 </Table.Tr>
                 <Table.Tr>
@@ -1745,14 +1759,14 @@ export default function RoundDetailPage() {
                   <Table.Th />
                   <Table.Th />
                   <Table.Th />
-                  {canApprove ? <Table.Th /> : null}
+                  {showActionColumn ? <Table.Th /> : null}
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
                 {sortedScorecards.length === 0 ? (
                   <Table.Tr>
-                    <Table.Td colSpan={holes.length + 6 + (canApprove ? 1 : 0)}>
+                    <Table.Td colSpan={holes.length + 6 + (showActionColumn ? 1 : 0)}>
                       <Text size="sm" c="dusk.6">
                         Aun no hay tarjetas registradas.
                       </Text>
@@ -1874,18 +1888,20 @@ export default function RoundDetailPage() {
                           {card.accepted ? "Aceptada" : "Pendiente"}
                         </Badge>
                       </Table.Td> */}
-                      {canApprove ? (
+                      {showActionColumn ? (
                         <Table.Td>
                           <Group gap="xs" className="gml-cell-actions">
-                            <Button
-                              size="xs"
-                              variant="light"
-                              component="a"
-                              href={`/rounds/${params?.id}/record?playerId=${card.player?._id}`}
-                              className="gml-btn-tight"
-                            >
-                              Editar
-                            </Button>
+                            {canApprove ? (
+                              <Button
+                                size="xs"
+                                variant="light"
+                                component="a"
+                                href={`/rounds/${params?.id}/record?playerId=${card.player?._id}`}
+                                className="gml-btn-tight"
+                              >
+                                Editar
+                              </Button>
+                            ) : null}
                             {card.accepted &&
                             !card.grintUploadedAt &&
                             me?._id &&
@@ -1900,18 +1916,20 @@ export default function RoundDetailPage() {
                                 Subir a Grint
                               </Button>
                             ) : null}
-                            <Button
-                              size="xs"
-                              variant="light"
-                              onClick={() => handleAccept(card._id)}
-                              disabled={
-                                card.accepted ||
-                                !isCardComplete(card)
-                              }
-                              className="gml-btn-tight"
-                            >
-                              {card.accepted ? "Listo" : "Aceptar"}
-                            </Button>
+                            {canApprove ? (
+                              <Button
+                                size="xs"
+                                variant="light"
+                                onClick={() => handleAccept(card._id)}
+                                disabled={
+                                  card.accepted ||
+                                  !isCardComplete(card)
+                                }
+                                className="gml-btn-tight"
+                              >
+                                {card.accepted ? "Listo" : "Aceptar"}
+                              </Button>
+                            ) : null}
                           </Group>
                         </Table.Td>
                       ) : null}
