@@ -75,6 +75,38 @@ export async function PATCH(request, { params }) {
   if (body?.configSnapshot) {
     round.configSnapshot = body.configSnapshot;
   }
+  if (Array.isArray(body?.playerGroups)) {
+    const allowedPlayers = new Set(
+      (round.players || []).map((playerId) => String(playerId))
+    );
+    round.playerGroups = body.playerGroups
+      .filter(
+        (entry) =>
+          entry?.player &&
+          entry?.group &&
+          allowedPlayers.has(String(entry.player))
+      )
+      .map((entry) => ({
+        player: entry.player,
+        group: Number(entry.group),
+      }));
+  }
+  if (Array.isArray(body?.groupMarshals)) {
+    const allowedPlayers = new Set(
+      (round.players || []).map((playerId) => String(playerId))
+    );
+    round.groupMarshals = body.groupMarshals
+      .filter(
+        (entry) =>
+          entry?.player &&
+          entry?.group &&
+          allowedPlayers.has(String(entry.player))
+      )
+      .map((entry) => ({
+        player: entry.player,
+        group: Number(entry.group),
+      }));
+  }
   await round.save();
 
   const updated = await Round.findById(id)

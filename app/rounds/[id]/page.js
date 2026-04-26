@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -119,6 +119,8 @@ export default function RoundDetailPage() {
   const [uploadingCardId, setUploadingCardId] = useState(null);
   const [uploadConfirmCard, setUploadConfirmCard] = useState(null);
   const [teesModalOpen, setTeesModalOpen] = useState(false);
+  const [groupsModalOpen, setGroupsModalOpen] = useState(false);
+  const [savingGroups, setSavingGroups] = useState(false);
   const [exportingRound, setExportingRound] = useState(false);
   const [removePlayerOpen, setRemovePlayerOpen] = useState(false);
   const [removePlayerId, setRemovePlayerId] = useState("");
@@ -127,6 +129,8 @@ export default function RoundDetailPage() {
   const [addPlayerId, setAddPlayerId] = useState("");
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
+  const [playerGroupsDraft, setPlayerGroupsDraft] = useState({});
+  const [groupMarshalsDraft, setGroupMarshalsDraft] = useState({});
 
   const holes = useMemo(
     () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
@@ -468,6 +472,22 @@ export default function RoundDetailPage() {
       return acc;
     }, {});
   }, [playerTees]);
+  const roundPlayerGroupsMap = useMemo(
+    () =>
+      (round?.playerGroups || []).reduce((acc, entry) => {
+        acc[String(entry.player)] = Number(entry.group) || 1;
+        return acc;
+      }, {}),
+    [round?.playerGroups]
+  );
+  const roundGroupMarshalsMap = useMemo(
+    () =>
+      (round?.groupMarshals || []).reduce((acc, entry) => {
+        acc[Number(entry.group)] = String(entry.player);
+        return acc;
+      }, {}),
+    [round?.groupMarshals]
+  );
   const isJoined = useMemo(
     () =>
       Boolean(
@@ -499,9 +519,16 @@ export default function RoundDetailPage() {
     ? "Cargando..."
     : `Inicio: ${formatRoundDate(roundStartAt)}`;
 
-  const teeOptions = useMemo(() => {
+  const allTees = useMemo(() => {
     const tees = round?.courseSnapshot?.tees;
     if (!tees) {
+      return [];
+    }
+    return [...(tees.male || []), ...(tees.female || [])];
+  }, [round]);
+
+  const teeOptions = useMemo(() => {
+    if (!allTees.length) {
       return [];
     }
     const groups = [
@@ -509,12 +536,32 @@ export default function RoundDetailPage() {
       { key: "female", label: "Damas" },
     ];
     return groups.flatMap((group) =>
-      (tees[group.key] || []).map((tee) => ({
+      ((round?.courseSnapshot?.tees || {})[group.key] || []).map((tee) => ({
         value: tee.tee_name,
         label: `${tee.tee_name} · ${group.label}`,
       }))
     );
-  }, [round]);
+  }, [allTees, round]);
+
+  const roundCourseHandicapByPlayer = useMemo(
+    () =>
+      roundPlayers.reduce((acc, player) => {
+        const playerId = String(player._id);
+        const teeName = playerTeeMap[playerId] || round?.teeName;
+        const selected = allTees.find((tee) => tee.tee_name === teeName) || allTees[0];
+        if (!selected) {
+          acc[playerId] = player.handicap ?? "-";
+          return acc;
+        }
+        acc[playerId] = getCourseHandicapForRound(
+          selected,
+          round,
+          player.handicap || 0
+        );
+        return acc;
+      }, {}),
+    [allTees, playerTeeMap, round, roundPlayers]
+  );
 
   useEffect(() => {
     if (teeOptions.length && !joinTee) {
@@ -1029,6 +1076,105 @@ export default function RoundDetailPage() {
     }
   };
 
+  const openGroupsEditor = () => {
+    setPlayerGroupsDraft(roundPlayerGroupsMap);
+    setGroupMarshalsDraft(roundGroupMarshalsMap);
+    setGroupsModalOpen(true);
+  };
+
+  const setDraftPlayerGroup = (playerId, group) => {
+    setPlayerGroupsDraft((prev) => {
+      const next = { ...prev, [String(playerId)]: Number(group) };
+      return next;
+    });
+    setGroupMarshalsDraft((prev) => {
+      const next = { ...prev };
+      Object.entries(next).forEach(([groupKey, marshalId]) => {
+        if (
+          Number(groupKey) !== Number(group) &&
+          String(marshalId) === String(playerId)
+        ) {
+          delete next[groupKey];
+        }
+      });
+      return next;
+    });
+  };
+
+  const toggleDraftMarshal = (playerId) => {
+    const currentGroup = Number(playerGroupsDraft[String(playerId)] || 0);
+    if (!currentGroup) {
+      return;
+    }
+    setGroupMarshalsDraft((prev) => {
+      const next = { ...prev };
+      Object.entries(next).forEach(([groupKey, marshalId]) => {
+        if (String(marshalId) === String(playerId)) {
+          delete next[groupKey];
+        }
+      });
+      if (String(prev[currentGroup]) !== String(playerId)) {
+        next[currentGroup] = String(playerId);
+      }
+      return next;
+    });
+  };
+
+  const handleSaveGroups = async () => {
+    if (!params?.id) {
+      return;
+    }
+    const missingPlayers = roundPlayers.filter(
+      (player) => !Number(playerGroupsDraft[String(player._id)] || 0)
+    );
+    if (missingPlayers.length > 0) {
+      notifications.show({
+        title: "Faltan grupos",
+        message: "Asigna grupo a todos los jugadores.",
+        color: "clay",
+      });
+      return;
+    }
+    setSavingGroups(true);
+    try {
+      const res = await fetch(`/api/rounds/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playerGroups: roundPlayers.map((player) => ({
+            player: String(player._id),
+            group: Number(playerGroupsDraft[String(player._id)] || 1),
+          })),
+          groupMarshals: Object.entries(groupMarshalsDraft)
+            .filter(([, playerId]) => playerId)
+            .map(([group, player]) => ({
+              group: Number(group),
+              player: String(player),
+            })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudieron guardar los grupos.");
+      }
+      setRound(data);
+      setGroupsModalOpen(false);
+      notifications.show({
+        title: "Grupos actualizados",
+        message: "Se guardaron los grupos de salida.",
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo guardar",
+        message: error.message || "Intenta mas tarde.",
+        color: "clay",
+      });
+    } finally {
+      setSavingGroups(false);
+    }
+  };
+
   const handleUploadGrint = async (scorecardId) => {
     if (!scorecardId) {
       return;
@@ -1413,6 +1559,108 @@ export default function RoundDetailPage() {
           </Group>
         </Modal>
         <Modal
+          opened={groupsModalOpen}
+          onClose={() => setGroupsModalOpen(false)}
+          title="Editar grupos de salida"
+          centered
+          size="md"
+        >
+          {roundPlayers.length === 0 ? (
+            <Text size="sm" c="dusk.6">
+              No hay jugadores en la jugada.
+            </Text>
+          ) : (
+            <>
+              <div className="gml-table-scroll gml-players-compact gml-groups-editor">
+                <Table
+                  withTableBorder
+                  withColumnBorders
+                  className="gml-group-table"
+                >
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Jugador</Table.Th>
+                      <Table.Th>Tee</Table.Th>
+                      <Table.Th>HC Tee</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {roundPlayers.map((player) => {
+                      const playerId = String(player._id);
+                      const currentGroup = Number(
+                        playerGroupsDraft[playerId] || 0
+                      );
+                      const isMarshal =
+                        currentGroup &&
+                        groupMarshalsDraft[currentGroup] === playerId;
+                      return (
+                        <Fragment key={playerId}>
+                          <Table.Tr data-group={currentGroup || undefined}>
+                            <Table.Td>{player.name}</Table.Td>
+                            <Table.Td>{playerTeeMap[playerId] || "-"}</Table.Td>
+                            <Table.Td>
+                              {roundCourseHandicapByPlayer[playerId] ?? "-"}
+                            </Table.Td>
+                          </Table.Tr>
+                          <Table.Tr data-group={currentGroup || undefined}>
+                            <Table.Td colSpan={3}>
+                              <Group gap={4} wrap="nowrap">
+                                {[1, 2, 3, 4].map((group) => (
+                                  <Button
+                                    key={`${playerId}-g${group}`}
+                                    size="xs"
+                                    variant={
+                                      currentGroup === group ? "filled" : "light"
+                                    }
+                                    color={
+                                      currentGroup === group ? "club" : "dusk"
+                                    }
+                                    onClick={() =>
+                                      setDraftPlayerGroup(playerId, group)
+                                    }
+                                  >
+                                    G{group}
+                                  </Button>
+                                ))}
+                                <Button
+                                  size="xs"
+                                  variant={isMarshal ? "filled" : "light"}
+                                  color={isMarshal ? "orange" : "dusk"}
+                                  onClick={() => toggleDraftMarshal(playerId)}
+                                  disabled={!currentGroup}
+                                >
+                                  M
+                                </Button>
+                              </Group>
+                            </Table.Td>
+                          </Table.Tr>
+                        </Fragment>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </div>
+              <Group justify="flex-end" mt="sm">
+                <Button
+                  size="xs"
+                  variant="default"
+                  onClick={() => setGroupsModalOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="xs"
+                  color="club"
+                  onClick={handleSaveGroups}
+                  loading={savingGroups}
+                >
+                  Guardar grupos
+                </Button>
+              </Group>
+            </>
+          )}
+        </Modal>
+        <Modal
           opened={teesModalOpen}
           onClose={() => setTeesModalOpen(false)}
           title="Editar tees de salida"
@@ -1534,6 +1782,15 @@ export default function RoundDetailPage() {
             </div>
             {isClosed ? (
               <Group>
+                {canManage ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={openGroupsEditor}
+                  >
+                    Editar grupos
+                  </Button>
+                ) : null}
                 {isAdmin ? (
                   <Button
                     size="xs"
@@ -1585,6 +1842,15 @@ export default function RoundDetailPage() {
                     href={`/rounds/${params?.id}/record`}
                   >
                     Editar mi tarjeta
+                  </Button>
+                ) : null}
+                {canManage ? (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={openGroupsEditor}
+                  >
+                    Editar grupos
                   </Button>
                 ) : null}
                 {canManage ? (
