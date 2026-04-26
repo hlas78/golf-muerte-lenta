@@ -223,6 +223,21 @@ export async function POST(request) {
             player.magicTokenCreatedAt = new Date();
             await player.save();
           }
+          const teeName =
+            teeByPlayer.get(String(player._id)) || defaultTeeName || "";
+          const groupNumber =
+            round.playerGroups?.find(
+              (entry) => String(entry.player) === String(player._id)
+            )?.group || null;
+          const selectedTee =
+            allTees.find((option) => option.tee_name === teeName) || allTees[0];
+          const courseHandicap = selectedTee
+            ? getCourseHandicapForRound(
+                selectedTee,
+                round,
+                player.handicap || 0
+              )
+            : null;
           const recordLink = buildRecordLink(round._id, player.magicToken);
           const message = buildWelcomeMessage({
             campo,
@@ -230,6 +245,9 @@ export async function POST(request) {
             description: round.description || "",
             recordLink,
             startedAt: round.startedAt,
+            groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
+            teeName,
+            courseHandicap,
           });
           console.log(`mensaje de bienvenida creado para ${player.name}`);
           return sendMessage(player.phone, message);

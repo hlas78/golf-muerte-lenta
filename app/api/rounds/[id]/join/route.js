@@ -91,18 +91,14 @@ export async function POST(request, { params }) {
     const creator = round.createdBy
       ? await User.findById(round.createdBy)
       : null;
-    const recordLink = buildRecordLink(round._id, user.magicToken);
-    const message = buildWelcomeMessage({
-      campo,
-      creatorName: creator?.name || "sin nombre",
-      description: round.description || "",
-      recordLink,
-      startedAt: round.startedAt,
-    });
     const playerTee =
       round.playerTees?.find(
         (entry) => String(entry.player) === String(user._id)
       )?.teeName || teeName;
+    const groupNumber =
+      round.playerGroups?.find(
+        (entry) => String(entry.player) === String(user._id)
+      )?.group || null;
     const tee =
       allTees.find((option) => option.tee_name === playerTee) || allTees[0];
     const courseHandicap = getCourseHandicapForRound(
@@ -110,6 +106,17 @@ export async function POST(request, { params }) {
       round,
       user.handicap
     );
+    const recordLink = buildRecordLink(round._id, user.magicToken);
+    const message = buildWelcomeMessage({
+      campo,
+      creatorName: creator?.name || "sin nombre",
+      description: round.description || "",
+      recordLink,
+      startedAt: round.startedAt,
+      groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
+      teeName: tee?.tee_name || playerTee || "",
+      courseHandicap,
+    });
     const existingCard = await Scorecard.findOne({
       round: round._id,
       player: user._id,

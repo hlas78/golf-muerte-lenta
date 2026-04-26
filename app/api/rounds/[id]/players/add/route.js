@@ -123,12 +123,24 @@ export async function POST(request, { params }) {
     round.courseSnapshot?.clubName || round.courseSnapshot?.courseName || "el campo";
   const creator = round.createdBy ? await User.findById(round.createdBy) : null;
   const recordLink = buildRecordLink(round._id, user.magicToken);
+  const courseHandicap = getCourseHandicapForRound(
+    selectedTee,
+    round,
+    user.handicap
+  );
+  const groupNumber =
+    round.playerGroups?.find(
+      (entry) => String(entry.player) === String(user._id)
+    )?.group || null;
   const message = buildWelcomeMessage({
     campo,
     creatorName: creator?.name || "sin nombre",
     description: round.description || "",
     recordLink,
     startedAt: round.startedAt,
+    groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
+    teeName: selectedTee.tee_name,
+    courseHandicap,
   });
   const now = new Date();
   if (!round.startedAt || round.startedAt <= now) {
