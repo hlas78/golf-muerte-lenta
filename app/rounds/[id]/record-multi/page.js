@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -15,7 +16,11 @@ import {
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../../components/AppShell";
 import { getSocket } from "@/lib/socketClient";
-import { getCourseHandicapForRound } from "@/lib/scoring";
+import {
+  allocateStrokes,
+  getCourseHandicapForRound,
+  normalizeHoleHandicaps,
+} from "@/lib/scoring";
 
 const PENALTIES = [
   { value: "pinkies", label: "Pinkies" },
@@ -45,6 +50,36 @@ const buildEmptyHoles = (count) =>
     holeOut: false,
   }));
 
+const TrashIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M3 6h18" />
+    <path d="M8 6V4h8v2" />
+    <path d="M19 6l-1 14H6L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+  </svg>
+);
+
+const formatToPar = (value) => {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  if (value === 0) {
+    return "E";
+  }
+  return value > 0 ? `+${value}` : String(value);
+};
+
 export default function RecordMultiPage() {
   const params = useParams();
   const router = useRouter();
@@ -62,6 +97,10 @@ export default function RecordMultiPage() {
     () => (params?.id ? `gml:round:${params.id}:record-multi:players` : ""),
     [params]
   );
+  const allTees = useMemo(() => {
+    const tees = round?.courseSnapshot?.tees;
+    return tees ? [...(tees.male || []), ...(tees.female || [])] : [];
+  }, [round]);
 
   useEffect(() => {
     fetch("/api/me")
@@ -151,6 +190,19 @@ export default function RecordMultiPage() {
   );
 
   useEffect(() => {
+    if (!players.length) {
+      return;
+    }
+    const validPlayerIds = new Set(players.map((player) => String(player._id)));
+    setSelectedPlayers((prev) => {
+      const filtered = prev.filter((playerId) =>
+        validPlayerIds.has(String(playerId))
+      );
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [players]);
+
+  useEffect(() => {
     if (!round || !me || selectedPlayers.length > 0) {
       return;
     }
@@ -207,8 +259,6 @@ export default function RecordMultiPage() {
   };
 
   const getHoleMetaForPlayer = (playerId) => {
-    const tees = round?.courseSnapshot?.tees || {};
-    const allTees = [...(tees.male || []), ...(tees.female || [])];
     const teeName =
       round?.playerTees?.find(
         (entry) => String(entry.player) === String(playerId)
@@ -220,6 +270,51 @@ export default function RecordMultiPage() {
       acc[idx + 1] = hole;
       return acc;
     }, {});
+  };
+
+  const getPlayerProgress = (card) => {
+    const playerId = String(card.player?._id || "");
+    const capturedHoles = (card.holes || []).filter(
+      (hole) => hole.strokes != null && hole.strokes !== ""
+    );
+    const grossTotal = capturedHoles.reduce(
+      (sum, hole) => sum + Number(hole.strokes || 0),
+      0
+    );
+    if (!capturedHoles.length) {
+      return { grossTotal: 0, netToPar: null };
+    }
+    const holeMeta = getHoleMetaForPlayer(playerId);
+    const parTotal = capturedHoles.reduce(
+      (sum, hole) => sum + Number(holeMeta[hole.hole]?.par || 0),
+      0
+    );
+    const teeName =
+      card.teeName ||
+      round?.playerTees?.find((entry) => String(entry.player) === playerId)?.teeName ||
+      round?.teeName;
+    const tee = allTees.find((option) => option.tee_name === teeName) || allTees[0];
+    const normalized = normalizeHoleHandicaps(tee?.holes || [], round);
+    const holeHandicaps = normalized.map((hole, idx) => ({
+      hole: hole.hole ?? idx + 1,
+      handicap: hole.handicap,
+    }));
+    const courseHandicap = getCourseHandicapForRound(
+      tee,
+      round,
+      card.player?.handicap ?? 0
+    );
+    const strokesMap = allocateStrokes(
+      Math.max(0, courseHandicap || 0),
+      holeHandicaps,
+      round?.holes || 18
+    );
+    const netTotal = capturedHoles.reduce(
+      (sum, hole) =>
+        sum + Number(hole.strokes || 0) - Number(strokesMap[hole.hole - 1] || 0),
+      0
+    );
+    return { grossTotal, netToPar: netTotal - parTotal };
   };
 
   const updatePlayerHole = (playerId, patch) => {
@@ -320,6 +415,27 @@ export default function RecordMultiPage() {
 
   const applyPuttPreset = (playerId, value) => {
     updatePlayerHole(playerId, { putts: value });
+  };
+
+  const clearPlayerHoleCapture = (playerId) => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Se borrarán golpes, putts y premios/castigos de este hoyo. ¿Continuar?"
+      )
+    ) {
+      return;
+    }
+    updatePlayerHole(playerId, {
+      strokes: "",
+      putts: "",
+      water: false,
+      ohYes: false,
+      sandy: false,
+      penalties: [],
+      bunker: false,
+      holeOut: false,
+    });
   };
 
   const updateNumber = (playerId, key, delta) => {
@@ -646,18 +762,40 @@ export default function RecordMultiPage() {
             const meta = holeMeta[holeNumber] || {};
             const locked = card.accepted || isClosed;
             const cardKey = playerId || card._id || `${idx}-${holeNumber}`;
+            const progress = getPlayerProgress(card);
             return (
               <Card key={cardKey} mb="sm" p="sm">
                 <Group justify="space-between" mb="xs">
                   <div>
-                    <Text fw={700}>{card.player?.name || "Jugador"}</Text>
+                    <Group gap="xs">
+                      <Text fw={700}>{card.player?.name || "Jugador"}</Text>
+                      <Badge color="dusk" variant="light">
+                        {progress.grossTotal}
+                      </Badge>
+                      <Badge color="club" variant="light">
+                        {formatToPar(progress.netToPar)}
+                      </Badge>
+                    </Group>
                     <Text size="sm" c="dusk.6">
                       Tee: {card.teeName || "Sin tee"}
                     </Text>
                   </div>
-                  <Badge color={locked ? "dusk" : "club"} variant="light">
-                    {locked ? "Bloqueada" : "Editable"}
-                  </Badge>
+                  <Group gap="xs" wrap="nowrap" align="flex-start">
+                    <Badge color={locked ? "dusk" : "club"} variant="light">
+                      {locked ? "Bloqueada" : "Editable"}
+                    </Badge>
+                    <ActionIcon
+                      size="sm"
+                      variant="light"
+                      color="clay"
+                      onClick={() => clearPlayerHoleCapture(playerId)}
+                      disabled={locked}
+                      title="Borrar captura"
+                      aria-label="Borrar captura"
+                    >
+                      <TrashIcon />
+                    </ActionIcon>
+                  </Group>
                 </Group>
                 <Text size="sm" c="dusk.6" mb="xs">
                   Hoyo {holeNumber} · Par {meta.par ?? "-"} · {meta.yardage ?? "--"} yds · HC{" "}

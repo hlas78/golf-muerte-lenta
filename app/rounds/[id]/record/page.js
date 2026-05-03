@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -35,6 +36,36 @@ const togglePenaltyValue = (penalties, penalty) => {
   return base.includes(penalty)
     ? base.filter((item) => item !== penalty)
     : [...base, penalty];
+};
+
+const TrashIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M3 6h18" />
+    <path d="M8 6V4h8v2" />
+    <path d="M19 6l-1 14H6L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+  </svg>
+);
+
+const formatToPar = (value) => {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  if (value === 0) {
+    return "E";
+  }
+  return value > 0 ? `+${value}` : String(value);
 };
 
 export default function RecordScorecardPage() {
@@ -463,6 +494,54 @@ export default function RecordScorecardPage() {
     return withActive;
   }, [scorecards, activePlayerId, holes, round]);
 
+  const activePlayerProgress = useMemo(() => {
+    const capturedHoles = holes.filter(
+      (hole) => hole.strokes != null && hole.strokes !== ""
+    );
+    const grossTotal = capturedHoles.reduce(
+      (sum, hole) => sum + Number(hole.strokes || 0),
+      0
+    );
+    if (!capturedHoles.length) {
+      return { grossTotal: 0, netToPar: null };
+    }
+    const parTotal = capturedHoles.reduce(
+      (sum, hole) => sum + Number(holeMeta[hole.hole]?.par || 0),
+      0
+    );
+    const teeName =
+      selectedTee ||
+      round?.playerTees?.find(
+        (entry) => String(entry.player) === String(activePlayerId)
+      )?.teeName ||
+      round?.teeName;
+    const tee = allTees.find((option) => option.tee_name === teeName) || allTees[0];
+    const normalized = normalizeHoleHandicaps(tee?.holes || [], round);
+    const holeHandicaps = normalized.map((hole, idx) => ({
+      hole: hole.hole ?? idx + 1,
+      handicap: hole.handicap,
+    }));
+    const courseHandicap = getCourseHandicapForRound(
+      tee,
+      round,
+      activePlayer?.handicap ?? 0
+    );
+    const strokesMap = allocateStrokes(
+      Math.max(0, courseHandicap || 0),
+      holeHandicaps,
+      round?.holes || holes.length
+    );
+    const netTotal = capturedHoles.reduce(
+      (sum, hole) =>
+        sum + Number(hole.strokes || 0) - Number(strokesMap[hole.hole - 1] || 0),
+      0
+    );
+    return {
+      grossTotal,
+      netToPar: netTotal - parTotal,
+    };
+  }, [holes, holeMeta, selectedTee, round, activePlayerId, allTees, activePlayer]);
+
   const holeWinners = useMemo(() => {
     if (!round?.holes || !liveScorecards.length) {
       return {};
@@ -642,6 +721,27 @@ export default function RecordScorecardPage() {
 
   const applyPuttPreset = (index, value) => {
     updateHole(index, { putts: value });
+  };
+
+  const clearHoleCapture = (index) => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Se borrarán golpes, putts y premios/castigos de este hoyo. ¿Continuar?"
+      )
+    ) {
+      return;
+    }
+    updateHole(index, {
+      strokes: "",
+      putts: "",
+      water: false,
+      ohYes: false,
+      sandy: false,
+      penalties: [],
+      bunker: false,
+      holeOut: false,
+    });
   };
 
   const updateNumber = (index, key, delta) => {
@@ -934,7 +1034,15 @@ export default function RecordScorecardPage() {
         </Modal>
         <Card mb="sm" p="sm">
           <Group justify="space-between">
-            <Text fw={700}>{title}</Text>
+            <Group gap="xs">
+              <Text fw={700}>{title}</Text>
+              <Badge color="dusk" variant="light">
+                Golpes {activePlayerProgress.grossTotal}
+              </Badge>
+              <Badge color="club" variant="light">
+                Neto {formatToPar(activePlayerProgress.netToPar)}
+              </Badge>
+            </Group>
             {/* <Badge color="club">{round?.holes || "--"} hoyos</Badge> */}
           </Group>
           <Text size="sm" c="dusk.6">
@@ -1036,14 +1144,24 @@ export default function RecordScorecardPage() {
                   </span>
                 ) : null}
               </div>
-              {/* <Badge color="dusk" variant="light">
-                Captura
-              </Badge> */}
-              <Text size="sm" c="dusk.6" mb="sm">
-                Par {holeMeta[hole.hole]?.par ?? "--"} ·{" "}
-                {holeMeta[hole.hole]?.yardage ?? "--"} yds · Ventaja {" "}
-                {holeMeta[hole.hole]?.handicap ?? "--"}
-              </Text>
+              <Group gap="xs" align="flex-start" wrap="nowrap">
+                <Text size="sm" c="dusk.6" ta="right">
+                  Par {holeMeta[hole.hole]?.par ?? "--"} ·{" "}
+                  {holeMeta[hole.hole]?.yardage ?? "--"} yds · Ventaja{" "}
+                  {holeMeta[hole.hole]?.handicap ?? "--"}
+                </Text>
+                <ActionIcon
+                  size="sm"
+                  variant="light"
+                  color="clay"
+                  onClick={() => clearHoleCapture(index)}
+                  disabled={locked || roundClosed}
+                  title="Borrar captura"
+                  aria-label="Borrar captura"
+                >
+                  <TrashIcon />
+                </ActionIcon>
+              </Group>
             </Group>
             <Group gap="xs" mb="xs">
               {(() => {

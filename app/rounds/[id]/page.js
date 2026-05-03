@@ -1500,13 +1500,44 @@ export default function RoundDetailPage() {
     if (!round?.holes) {
       return false;
     }
-    for (let i = 1; i <= round.holes; i += 1) {
-      const entry = card.holes?.find((hole) => hole.hole === i);
-      if (entry?.strokes == null || entry.strokes === "") {
-        return false;
+    const hasRangeComplete = (start, end) => {
+      for (let i = start; i <= end; i += 1) {
+        const entry = card.holes?.find((hole) => hole.hole === i);
+        if (entry?.strokes == null || entry.strokes === "") {
+          return false;
+        }
       }
+      return true;
+    };
+    const hasRangeEmpty = (start, end) => {
+      for (let i = start; i <= end; i += 1) {
+        const entry = card.holes?.find((hole) => hole.hole === i);
+        if (entry?.strokes != null && entry.strokes !== "") {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    if (round.holes <= 9) {
+      return hasRangeComplete(1, round.holes);
     }
-    return true;
+
+    const frontComplete = hasRangeComplete(1, 9);
+    const backComplete = hasRangeComplete(10, 18);
+    const frontEmpty = hasRangeEmpty(1, 9);
+    const backEmpty = hasRangeEmpty(10, 18);
+
+    if (frontComplete && backComplete) {
+      return true;
+    }
+    if (frontComplete && backEmpty) {
+      return true;
+    }
+    if (backComplete && frontEmpty) {
+      return true;
+    }
+    return false;
   };
   const allCardsComplete =
     scorecards.length > 0 && scorecards.every((card) => isCardComplete(card));

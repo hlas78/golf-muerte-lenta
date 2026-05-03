@@ -2,6 +2,7 @@ import connectDb from "../lib/db.js";
 import Round from "../lib/models/Round.js";
 import User from "../lib/models/User.js";
 import { buildWelcomeMessage } from "../lib/welcomeMessageBuilder.js";
+import { getCourseHandicapForRound } from "../lib/scoring.js";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -56,6 +57,25 @@ async function run() {
         player.magicTokenCreatedAt = new Date();
         await player.save();
       }
+      const tees = round.courseSnapshot?.tees || {};
+      const allTees = [...(tees.male || []), ...(tees.female || [])];
+      const teeName =
+        round.playerTees?.find(
+          (entry) => String(entry.player) === String(player._id)
+        )?.teeName || "";
+      const groupNumber =
+        round.playerGroups?.find(
+          (entry) => String(entry.player) === String(player._id)
+        )?.group || null;
+      const selectedTee =
+        allTees.find((option) => option.tee_name === teeName) || allTees[0];
+      const courseHandicap = selectedTee
+        ? getCourseHandicapForRound(
+            selectedTee,
+            round,
+            player.handicap || 0
+          )
+        : null;
       const recordLink = buildRecordLink(round._id, player.magicToken);
       const message = buildWelcomeMessage({
         campo,
@@ -63,6 +83,9 @@ async function run() {
         description: round.description || "",
         recordLink,
         startedAt: round.startedAt,
+        groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
+        teeName: selectedTee?.tee_name || teeName,
+        courseHandicap,
       });
       await sendMessage(player.phone, message);
       sent.add(String(player._id));
