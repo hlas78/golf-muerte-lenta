@@ -247,99 +247,103 @@ export async function POST(request, { params }) {
     );
   }
 
-  let payments = await Payment.find({ round: round._id });
-  if (payments.length === 0) {
-    const config = await Config.findOne({ key: "global" });
-    const tees = round.courseSnapshot?.tees || {};
-    const allTees = [...(tees.male || []), ...(tees.female || [])];
-    const fallbackTee =
-      allTees.find((option) => option.tee_name === round.teeName) ||
-      allTees[0];
-    const normalizedFallbackHoles = normalizeHoleHandicaps(
-      fallbackTee?.holes || [],
+  const config = await Config.findOne({ key: "global" });
+  const calcTees = round.courseSnapshot?.tees || {};
+  const calcAllTees = [...(calcTees.male || []), ...(calcTees.female || [])];
+  const calcFallbackTee =
+    calcAllTees.find((option) => option.tee_name === round.teeName) ||
+    calcAllTees[0];
+  const calcNormalizedFallbackHoles = normalizeHoleHandicaps(
+    calcFallbackTee?.holes || [],
+    round
+  );
+  const calcHoleHandicaps =
+    calcNormalizedFallbackHoles.map((hole, idx) => ({
+      hole: hole.hole ?? idx + 1,
+      handicap: hole.handicap,
+      par: hole.par,
+    })) || [];
+
+  const calcHoleHandicapsByPlayer = {};
+  const calcPopulatedScorecards = await Scorecard.find({ round: round._id })
+    .populate(
+      "player",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    )
+    .sort({ createdAt: 1 });
+  calcPopulatedScorecards.forEach((card) => {
+    const playerTee =
+      card.teeName ||
+      round.playerTees?.find(
+        (entry) => String(entry.player) === String(card.player?._id)
+      )?.teeName;
+    const tee =
+      calcAllTees.find((option) => option.tee_name === playerTee) ||
+      calcFallbackTee;
+    const normalizedPlayerHoles = normalizeHoleHandicaps(
+      tee?.holes || [],
       round
     );
-    const holeHandicaps =
-      normalizedFallbackHoles.map((hole, idx) => ({
+    calcHoleHandicapsByPlayer[card.player?._id?.toString()] =
+      normalizedPlayerHoles.map((hole, idx) => ({
         hole: hole.hole ?? idx + 1,
         handicap: hole.handicap,
         par: hole.par,
-      })) || [];
+      })) || calcHoleHandicaps;
 
-    const holeHandicapsByPlayer = {};
-    const populatedScorecards = await Scorecard.find({ round: round._id })
-      .populate(
-        "player",
-        "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
-      )
-      .sort({ createdAt: 1 });
-    populatedScorecards.forEach((card) => {
-      const playerTee =
-        card.teeName ||
-        round.playerTees?.find(
-          (entry) => String(entry.player) === String(card.player?._id)
-        )?.teeName;
-      const tee =
-        allTees.find((option) => option.tee_name === playerTee) ||
-        fallbackTee;
-      const normalizedPlayerHoles = normalizeHoleHandicaps(
-        tee?.holes || [],
-        round
-      );
-      holeHandicapsByPlayer[card.player?._id?.toString()] =
-        normalizedPlayerHoles.map((hole, idx) => ({
-          hole: hole.hole ?? idx + 1,
-          handicap: hole.handicap,
-          par: hole.par,
-        })) || holeHandicaps;
-
-      const courseHandicap = getCourseHandicapForRound(
-        tee,
-        round,
-        card.player?.handicap
-      );
-      const strokesMap = allocateStrokes(
-        courseHandicap,
-        holeHandicapsByPlayer[card.player?._id?.toString()] || holeHandicaps,
-        round.holes
-      );
-      const netTotal = (card.holes || []).slice(0, round.holes).reduce((sum, hole) => {
+    const courseHandicap = getCourseHandicapForRound(
+      tee,
+      round,
+      card.player?.handicap
+    );
+    const strokesMap = allocateStrokes(
+      courseHandicap,
+      calcHoleHandicapsByPlayer[card.player?._id?.toString()] ||
+        calcHoleHandicaps,
+      round.holes
+    );
+    const netTotal = (card.holes || [])
+      .slice(0, round.holes)
+      .reduce((sum, hole) => {
         const strokes = hole?.strokes || 0;
         return sum + (strokes - (strokesMap[hole.hole] || 0));
       }, 0);
-      card.courseHandicap = courseHandicap;
-      card.netTotal = netTotal;
-    });
+    card.courseHandicap = courseHandicap;
+    card.netTotal = netTotal;
+  });
 
-    await Promise.all(
-      populatedScorecards.map((card) =>
-        Scorecard.updateOne(
-          { _id: card._id },
-          { courseHandicap: card.courseHandicap, netTotal: card.netTotal }
-        )
+  await Promise.all(
+    calcPopulatedScorecards.map((card) =>
+      Scorecard.updateOne(
+        { _id: card._id },
+        { courseHandicap: card.courseHandicap, netTotal: card.netTotal }
       )
-    );
+    )
+  );
 
-    const roundConfigSnapshot = round.configSnapshot;
-    const roundConfig =
-      roundConfigSnapshot && roundConfigSnapshot.bets
-        ? roundConfigSnapshot
-        : { bets: roundConfigSnapshot || config?.bets || {} };
-    const calculated = calculatePayments({
-      config: roundConfig,
-      round,
-      scorecards: populatedScorecards,
-      holeHandicaps,
-      holeHandicapsByPlayer,
-    });
+  const roundConfigSnapshot = round.configSnapshot;
+  const roundConfig =
+    roundConfigSnapshot && roundConfigSnapshot.bets
+      ? roundConfigSnapshot
+      : { bets: roundConfigSnapshot || config?.bets || {} };
+  const calculated = calculatePayments({
+    config: roundConfig,
+    round,
+    scorecards: calcPopulatedScorecards,
+    holeHandicaps: calcHoleHandicaps,
+    holeHandicapsByPlayer: calcHoleHandicapsByPlayer,
+  });
+
+  await Payment.deleteMany({ round: round._id });
+  if (calculated.length > 0) {
     await Payment.insertMany(
       calculated.map((payment) => ({
         ...payment,
         round: round._id,
       }))
     );
-    payments = await Payment.find({ round: round._id });
   }
+  const payments = await Payment.find({ round: round._id });
 
   const summary = buildSummary(payments);
   const optimizedTransfers = minimizeTransfers(summary);

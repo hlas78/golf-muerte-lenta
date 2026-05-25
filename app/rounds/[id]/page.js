@@ -1403,6 +1403,13 @@ export default function RoundDetailPage() {
       if (Array.isArray(data.optimizedTransfers)) {
         setOptimizedTransfers(data.optimizedTransfers);
       }
+      const refreshedSummary = await fetch(`/api/rounds/${params.id}/summary`).then(
+        (r) => r.json()
+      );
+      setSummary(refreshedSummary);
+      if (Array.isArray(refreshedSummary.payments)) {
+        setOptimizedTransfers(minimizeTransfers(refreshedSummary.payments));
+      }
       notifications.show({
         title: "Jugada cerrada",
         message: "Tarjetas bloqueadas.",
@@ -1921,7 +1928,7 @@ export default function RoundDetailPage() {
                     Editar apuestas
                   </Button>
                 ) : null}
-                {canApprove ? (
+                {isAdmin ? (
                   <Button
                     size="xs"
                     color="club"
@@ -1960,7 +1967,7 @@ export default function RoundDetailPage() {
                     loading={closing}
                     disabled={!allAccepted}
                   >
-                    Cerrar jugada
+                    Cerrar jugada y enviar pagos
                   </Button>
                 ) : null}
                 {isAdmin ? (

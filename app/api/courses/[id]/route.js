@@ -19,20 +19,24 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { gender, teeName, course_rating, slope_rating } = await request.json();
-  if (!gender || !teeName) {
-    return NextResponse.json(
-      { error: "gender y teeName son requeridos." },
-      { status: 400 }
-    );
-  }
-  if (!["male", "female"].includes(gender)) {
-    return NextResponse.json({ error: "Genero invalido." }, { status: 400 });
-  }
+  const { gender, teeName, course_rating, slope_rating, active } =
+    await request.json();
 
   const course = await Course.findById(resolvedParams.id);
   if (!course) {
     return NextResponse.json({ error: "Campo no encontrado." }, { status: 404 });
+  }
+
+  if (typeof active === "boolean") {
+    course.active = active;
+  }
+
+  if (!gender || !teeName) {
+    await course.save();
+    return NextResponse.json({ ok: true, course });
+  }
+  if (!["male", "female"].includes(gender)) {
+    return NextResponse.json({ error: "Genero invalido." }, { status: 400 });
   }
 
   const tees = course.tees?.[gender] || [];

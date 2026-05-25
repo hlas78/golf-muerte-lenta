@@ -34,7 +34,7 @@ export default function CourseDownloadPage() {
           return;
         }
         setCoursesLoading(true);
-        fetch("/api/courses")
+        fetch("/api/courses?all=1")
           .then((res) => res.json())
           .then((list) => setCourses(Array.isArray(list) ? list : []))
           .catch(() => setCourses([]))
@@ -106,6 +106,36 @@ export default function CourseDownloadPage() {
       notifications.show({
         title: "Valores actualizados",
         message: "Se guardaron los ajustes del tee.",
+        color: "club",
+      });
+      setCourses((prev) =>
+        prev.map((item) => (item._id === courseId ? data.course : item))
+      );
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo guardar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    }
+  };
+
+  const toggleCourseActive = async (courseId, active) => {
+    try {
+      const res = await fetch(`/api/courses/${courseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo guardar.");
+      }
+      notifications.show({
+        title: active ? "Campo activado" : "Campo desactivado",
+        message: active
+          ? "El campo volvera a mostrarse al iniciar jugada."
+          : "El campo ya no aparecera al iniciar jugada.",
         color: "club",
       });
       setCourses((prev) =>
@@ -192,10 +222,24 @@ export default function CourseDownloadPage() {
                     <Stack gap="md">
                       {clubCourses.map((course) => (
                         <Card key={course._id} withBorder>
-                          <Text fw={600}>{course.courseName}</Text>
-                          <Text size="sm" c="dusk.6" mb="sm">
-                            {course.clubName}
-                          </Text>
+                          <Group justify="space-between" align="flex-start" mb="sm">
+                            <div>
+                              <Text fw={600}>{course.courseName}</Text>
+                              <Text size="sm" c="dusk.6">
+                                {course.clubName}
+                              </Text>
+                            </div>
+                            <Button
+                              size="xs"
+                              variant={course.active === false ? "filled" : "light"}
+                              color={course.active === false ? "clay" : "club"}
+                              onClick={() =>
+                                toggleCourseActive(course._id, course.active === false)
+                              }
+                            >
+                              {course.active === false ? "Activar" : "Desactivar"}
+                            </Button>
+                          </Group>
                           {["male", "female"].map((gender) => {
                             const tees = course.tees?.[gender] || [];
                             if (tees.length === 0) {

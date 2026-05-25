@@ -60,7 +60,16 @@ export async function POST(request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const payload = await request.json();
-  const course = await Course.findOne({ courseId: payload.courseId });
+  const course = await Course.findOne({
+    courseId: payload.courseId,
+    active: { $ne: false },
+  });
+  if (!course) {
+    return NextResponse.json(
+      { error: "Campo no encontrado o inactivo" },
+      { status: 404 }
+    );
+  }
   const config = await getConfigSnapshot();
 
   const startedAtValue = payload.startedAt
