@@ -68,6 +68,38 @@ const formatToPar = (value) => {
   return value > 0 ? `+${value}` : String(value);
 };
 
+const buildEmptyScoreHoles = (count) =>
+  Array.from({ length: count }, (_, idx) => ({
+    hole: idx + 1,
+    strokes: "",
+    putts: "",
+    ohYes: false,
+    sandy: false,
+    penalties: [],
+    bunker: false,
+    water: false,
+    holeOut: false,
+  }));
+
+const RefreshIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 2v6h-6" />
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M3 22v-6h6" />
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
 export default function RecordScorecardPage() {
   const params = useParams();
   const router = useRouter();
@@ -80,6 +112,7 @@ export default function RecordScorecardPage() {
   const [scorecards, setScorecards] = useState([]);
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -94,6 +127,7 @@ export default function RecordScorecardPage() {
   const [grintImporting, setGrintImporting] = useState(false);
   const [activeScorecardId, setActiveScorecardId] = useState(null);
   const [reopeningScorecard, setReopeningScorecard] = useState(false);
+  const [refreshingView, setRefreshingView] = useState(false);
   const saveTimeout = useRef(null);
   const initialized = useRef(false);
   const loadedExisting = useRef(false);
@@ -161,19 +195,7 @@ export default function RecordScorecardPage() {
         setRound(data);
         setRoundClosed(data?.status === "closed");
         const count = data?.holes || 18;
-        setHoles(
-          Array.from({ length: count }, (_, idx) => ({
-            hole: idx + 1,
-            strokes: "",
-            putts: "",
-            ohYes: false,
-            sandy: false,
-            penalties: [],
-            bunker: false,
-            water: false,
-            holeOut: false,
-          }))
-        );
+        setHoles(buildEmptyScoreHoles(count));
         const tees = data?.courseSnapshot?.tees || {};
         const allTees = [...(tees.male || []), ...(tees.female || [])];
         const meta = allTees[0]?.holes || [];
@@ -284,6 +306,7 @@ export default function RecordScorecardPage() {
             })
           );
         }
+        setDirty(false);
         loadedExisting.current = true;
         setLoadingExisting(false);
       })
@@ -576,6 +599,7 @@ export default function RecordScorecardPage() {
     if (locked) {
       return;
     }
+    setDirty(true);
     setHoles((prev) =>
       prev.map((hole, idx) => {
         if (idx !== index) {
@@ -762,6 +786,108 @@ export default function RecordScorecardPage() {
       .catch(() => setScorecards([]));
   };
 
+  const loadRound = async () => {
+    if (!params?.id) {
+      return null;
+    }
+    const res = await fetch(`/api/rounds/${params.id}`);
+    const data = await res.json();
+    setRound(data);
+    setRoundClosed(data?.status === "closed");
+    return data;
+  };
+
+  const syncActiveScorecardFromServer = (existing, nextRound = round) => {
+    setActiveScorecardId(existing?._id ? String(existing._id) : null);
+    setLocked(Boolean(existing?.accepted));
+    if (existing?.teeName) {
+      setSelectedTee(existing.teeName);
+    }
+    if (existing?.teeName && nextRound?.courseSnapshot?.tees) {
+      const tees = nextRound.courseSnapshot.tees || {};
+      const allTees = [...(tees.male || []), ...(tees.female || [])];
+      const selected = allTees.find((tee) => tee.tee_name === existing.teeName);
+      const meta = selected?.holes || allTees[0]?.holes || [];
+      const metaMap = meta.reduce((acc, hole, idx) => {
+        acc[idx + 1] = hole;
+        return acc;
+      }, {});
+      setHoleMeta(metaMap);
+    }
+    if (!existing?.holes?.length) {
+      return;
+    }
+    const holeCount =
+      nextRound?.holes || round?.holes || existing.holes.length || 18;
+    setHoles(
+      buildEmptyScoreHoles(holeCount).map((hole) => {
+        const match = existing.holes.find((entry) => entry.hole === hole.hole);
+        if (!match) {
+          return hole;
+        }
+        return {
+          ...hole,
+          strokes: match.strokes ?? "",
+          putts: match.putts ?? "",
+          ohYes: Boolean(match.ohYes),
+          sandy: Boolean(match.sandy),
+          penalties: match.penalties || [],
+          bunker: Boolean(match.bunker),
+          water: Boolean(match.water),
+          holeOut: Boolean(match.holeOut),
+        };
+      })
+    );
+    setDirty(false);
+  };
+
+  const refreshRecordView = async ({ notify = false } = {}) => {
+    if (!params?.id) {
+      return;
+    }
+    if (dirty || saving || autoSaving || loadingExisting) {
+      if (notify) {
+        notifications.show({
+          title: "Guarda antes de actualizar",
+          message: "Hay cambios locales pendientes.",
+          color: "dusk",
+        });
+      }
+      return;
+    }
+    setRefreshingView(true);
+    try {
+      const nextRound = await loadRound();
+      const scorecardsRes = await fetch(`/api/rounds/${params.id}/scorecards`);
+      const scorecardsData = await scorecardsRes.json();
+      const nextScorecards = Array.isArray(scorecardsData.scorecards)
+        ? scorecardsData.scorecards
+        : [];
+      setScorecards(nextScorecards);
+      const existing = nextScorecards.find(
+        (card) => String(card.player?._id) === String(activePlayerId)
+      );
+      syncActiveScorecardFromServer(existing, nextRound);
+      if (notify) {
+        notifications.show({
+          title: "Vista actualizada",
+          message: "Se recargó la tarjeta.",
+          color: "club",
+        });
+      }
+    } catch {
+      if (notify) {
+        notifications.show({
+          title: "No se pudo actualizar",
+          message: "Intenta de nuevo.",
+          color: "clay",
+        });
+      }
+    } finally {
+      setRefreshingView(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!me?._id || !activePlayerId) {
       notifications.show({
@@ -804,6 +930,7 @@ export default function RecordScorecardPage() {
         const data = await res.json();
         throw new Error(data.error || "No se pudo guardar.");
       }
+      setDirty(false);
       const socket = getSocket();
       socket.emit("scorecard:update", {
         roundId: params.id,
@@ -855,6 +982,7 @@ export default function RecordScorecardPage() {
         payload: { playerId: activePlayerId },
       });
       setLastSavedAt(new Date());
+      setDirty(false);
     } catch (error) {
       notifications.show({
         title: "Error en guardado automatico",
@@ -931,6 +1059,7 @@ export default function RecordScorecardPage() {
           };
         })
       );
+      setDirty(true);
       notifications.show({
         title: "Tarjeta cargada",
         message: "Datos importados desde TheGrint.",
@@ -973,6 +1102,34 @@ export default function RecordScorecardPage() {
       socket.off("scorecard:update", loadScorecards);
     };
   }, [params?.id]);
+
+  useEffect(() => {
+    if (!params?.id) {
+      return;
+    }
+    let lastRefreshAt = 0;
+    const refreshIfNeeded = () => {
+      const now = Date.now();
+      if (now - lastRefreshAt < 1500) {
+        return;
+      }
+      lastRefreshAt = now;
+      refreshRecordView();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfNeeded();
+      }
+    };
+    window.addEventListener("focus", refreshIfNeeded);
+    window.addEventListener("pageshow", refreshIfNeeded);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", refreshIfNeeded);
+      window.removeEventListener("pageshow", refreshIfNeeded);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [params?.id, dirty, saving, autoSaving, loadingExisting, activePlayerId, round]);
 
   return (
     <main className="gml-scorecard-compact">
@@ -1036,6 +1193,16 @@ export default function RecordScorecardPage() {
           <Group justify="space-between">
             <Group gap="xs">
               <Text fw={700}>{title}</Text>
+              <ActionIcon
+                size="sm"
+                variant="light"
+                onClick={() => refreshRecordView({ notify: true })}
+                loading={refreshingView}
+                aria-label="Actualizar tarjeta"
+                title="Actualizar tarjeta"
+              >
+                <RefreshIcon />
+              </ActionIcon>
               <Badge color="dusk" variant="light">
                 Golpes {activePlayerProgress.grossTotal}
               </Badge>

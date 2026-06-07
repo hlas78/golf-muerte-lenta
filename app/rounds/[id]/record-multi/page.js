@@ -80,6 +80,25 @@ const formatToPar = (value) => {
   return value > 0 ? `+${value}` : String(value);
 };
 
+const RefreshIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 2v6h-6" />
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M3 22v-6h6" />
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
 export default function RecordMultiPage() {
   const params = useParams();
   const router = useRouter();
@@ -92,6 +111,7 @@ export default function RecordMultiPage() {
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [refreshingView, setRefreshingView] = useState(false);
   const autoSaveTimeout = useRef(null);
   const storageKey = useMemo(
     () => (params?.id ? `gml:round:${params.id}:record-multi:players` : ""),
@@ -141,6 +161,53 @@ export default function RecordMultiPage() {
         setScorecards(Array.isArray(data.scorecards) ? data.scorecards : []);
       })
       .catch(() => setScorecards([]));
+  };
+
+  const loadRound = async () => {
+    if (!params?.id) {
+      return null;
+    }
+    const res = await fetch(`/api/rounds/${params.id}`);
+    const data = await res.json();
+    setRound(data);
+    return data;
+  };
+
+  const refreshRecordMultiView = async ({ notify = false } = {}) => {
+    if (!params?.id) {
+      return;
+    }
+    if (dirty || saving || autoSaving) {
+      if (notify) {
+        notifications.show({
+          title: "Guarda antes de actualizar",
+          message: "Hay cambios locales pendientes.",
+          color: "dusk",
+        });
+      }
+      return;
+    }
+    setRefreshingView(true);
+    try {
+      await Promise.all([loadRound(), Promise.resolve(loadScorecards())]);
+      if (notify) {
+        notifications.show({
+          title: "Vista actualizada",
+          message: "Se recargó la captura por hoyo.",
+          color: "club",
+        });
+      }
+    } catch {
+      if (notify) {
+        notifications.show({
+          title: "No se pudo actualizar",
+          message: "Intenta de nuevo.",
+          color: "clay",
+        });
+      }
+    } finally {
+      setRefreshingView(false);
+    }
   };
 
   useEffect(() => {
@@ -577,6 +644,34 @@ export default function RecordMultiPage() {
     }
   }, [selectedPlayers, storageKey]);
 
+  useEffect(() => {
+    if (!params?.id) {
+      return;
+    }
+    let lastRefreshAt = 0;
+    const refreshIfNeeded = () => {
+      const now = Date.now();
+      if (now - lastRefreshAt < 1500) {
+        return;
+      }
+      lastRefreshAt = now;
+      refreshRecordMultiView();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfNeeded();
+      }
+    };
+    window.addEventListener("focus", refreshIfNeeded);
+    window.addEventListener("pageshow", refreshIfNeeded);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", refreshIfNeeded);
+      window.removeEventListener("pageshow", refreshIfNeeded);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [params?.id, dirty, saving, autoSaving, round]);
+
   const stepHole = async (direction) => {
     if (!round?.holes) {
       return;
@@ -691,9 +786,21 @@ export default function RecordMultiPage() {
         </Modal>
         <Card mb="sm" p="sm">
           <div>
-            <Text size="sm" fw={600} mb={6}>
-              Jugadores
-            </Text>
+            <Group gap="xs" mb={6}>
+              <Text size="sm" fw={600}>
+                Jugadores
+              </Text>
+              <ActionIcon
+                size="sm"
+                variant="light"
+                onClick={() => refreshRecordMultiView({ notify: true })}
+                loading={refreshingView}
+                aria-label="Actualizar captura"
+                title="Actualizar captura"
+              >
+                <RefreshIcon />
+              </ActionIcon>
+            </Group>
             <Button
               variant="light"
               onClick={() => setPlayersModalOpen(true)}
