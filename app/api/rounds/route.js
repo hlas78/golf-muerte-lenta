@@ -37,14 +37,44 @@ export async function GET() {
   const rounds = await Round.find()
     .populate(
       "supervisor",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
+      "name"
     )
     .populate(
       "players",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
+      "name"
     )
-    .sort({ createdAt: -1 });
-  return NextResponse.json(rounds);
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const summarized = rounds.map((round) => ({
+    _id: round._id,
+    status: round.status,
+    holes: round.holes,
+    nineType: round.nineType,
+    description: round.description || "",
+    startedAt: round.startedAt,
+    createdAt: round.createdAt,
+    endedAt: round.endedAt,
+    welcomeSentAt: round.welcomeSentAt,
+    courseSnapshot: {
+      clubName: round.courseSnapshot?.clubName || "",
+      courseName: round.courseSnapshot?.courseName || "",
+    },
+    supervisor: round.supervisor
+      ? {
+          _id: round.supervisor._id,
+          name: round.supervisor.name,
+        }
+      : null,
+    players: Array.isArray(round.players)
+      ? round.players.map((player) => ({
+          _id: player._id,
+          name: player.name,
+        }))
+      : [],
+  }));
+
+  return NextResponse.json(summarized);
 }
 
 export async function POST(request) {
