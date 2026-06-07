@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
+  ActionIcon,
   Accordion,
   Badge,
   Button,
@@ -70,6 +71,25 @@ const GROUP_ITEMS = new Set([
   "ohYes",
 ]);
 
+const RefreshIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M21 2v6h-6" />
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M3 22v-6h6" />
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
 const formatRoundDate = (value) => {
   if (!value) {
     return "Sin fecha";
@@ -131,6 +151,7 @@ export default function RoundDetailPage() {
   const [allUsers, setAllUsers] = useState([]);
   const [playerGroupsDraft, setPlayerGroupsDraft] = useState({});
   const [groupMarshalsDraft, setGroupMarshalsDraft] = useState({});
+  const [refreshingView, setRefreshingView] = useState(false);
 
   const holes = useMemo(
     () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
@@ -169,6 +190,16 @@ export default function RoundDetailPage() {
       })
       .finally(() => setLoading(false));
   }, [params]);
+
+  const loadRound = async () => {
+    if (!params?.id) {
+      return null;
+    }
+    const res = await fetch(`/api/rounds/${params.id}`);
+    const data = await res.json();
+    setRound(data);
+    return data;
+  };
 
   useEffect(() => {
     fetch("/api/me")
@@ -213,6 +244,48 @@ export default function RoundDetailPage() {
         setAllAccepted(Boolean(data.allAccepted));
       })
       .catch(() => setScorecards([]));
+  };
+
+  const loadSummary = () => {
+    if (!params?.id) {
+      return;
+    }
+    fetch(`/api/rounds/${params.id}/summary`)
+      .then((res) => res.json())
+      .then((data) => {
+        setSummary(data);
+        if (Array.isArray(data.payments)) {
+          setOptimizedTransfers(minimizeTransfers(data.payments));
+        }
+      })
+      .catch(() => setSummary(null));
+  };
+
+  const refreshRoundView = async ({ notify = false } = {}) => {
+    if (!params?.id) {
+      return;
+    }
+    setRefreshingView(true);
+    try {
+      await Promise.all([loadRound(), Promise.resolve(loadScorecards()), Promise.resolve(loadSummary())]);
+      if (notify) {
+        notifications.show({
+          title: "Vista actualizada",
+          message: "Se recargaron tarjetas y pagos.",
+          color: "club",
+        });
+      }
+    } catch (error) {
+      if (notify) {
+        notifications.show({
+          title: "No se pudo actualizar",
+          message: "Intenta de nuevo.",
+          color: "clay",
+        });
+      }
+    } finally {
+      setRefreshingView(false);
+    }
   };
 
   const sortedScorecards = useMemo(
@@ -449,15 +522,35 @@ export default function RoundDetailPage() {
     if (!params?.id) {
       return;
     }
-    fetch(`/api/rounds/${params.id}/summary`)
-      .then((res) => res.json())
-      .then((data) => {
-        setSummary(data);
-        if (Array.isArray(data.payments)) {
-          setOptimizedTransfers(minimizeTransfers(data.payments));
-        }
-      })
-      .catch(() => setSummary(null));
+    loadSummary();
+  }, [params]);
+
+  useEffect(() => {
+    if (!params?.id) {
+      return;
+    }
+    let lastRefreshAt = 0;
+    const refreshIfNeeded = () => {
+      const now = Date.now();
+      if (now - lastRefreshAt < 1500) {
+        return;
+      }
+      lastRefreshAt = now;
+      refreshRoundView();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfNeeded();
+      }
+    };
+    window.addEventListener("focus", refreshIfNeeded);
+    window.addEventListener("pageshow", refreshIfNeeded);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", refreshIfNeeded);
+      window.removeEventListener("pageshow", refreshIfNeeded);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [params]);
 
   const courseName = round?.courseSnapshot?.clubName
@@ -2011,7 +2104,19 @@ export default function RoundDetailPage() {
 
         <Card>
           <Group justify="space-between" mb="sm">
-            <Text fw={700}>Tarjeta</Text>
+            <Group gap="xs">
+              <Text fw={700}>Tarjeta</Text>
+              <ActionIcon
+                size="sm"
+                variant="light"
+                onClick={() => refreshRoundView({ notify: true })}
+                loading={refreshingView}
+                aria-label="Actualizar tarjeta"
+                title="Actualizar tarjeta"
+              >
+                <RefreshIcon />
+              </ActionIcon>
+            </Group>
             <Select
               size="xs"
               data={[
