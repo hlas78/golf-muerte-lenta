@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
   const round = await Round.findById(id)
     .populate(
       "players",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .lean();
   if (!round) {
@@ -34,7 +34,7 @@ export async function GET(request, { params }) {
   const scorecards = await Scorecard.find({ round: round._id })
     .populate(
       "player",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .lean();
   const payments = await Payment.find({ round: round._id }).lean();

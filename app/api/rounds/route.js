@@ -37,11 +37,11 @@ export async function GET() {
   const rounds = await Round.find()
     .populate(
       "supervisor",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .populate(
       "players",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .sort({ createdAt: -1 });
   return NextResponse.json(rounds);

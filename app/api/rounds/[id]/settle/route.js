@@ -54,7 +54,7 @@ export async function POST(request, { params }) {
   const scorecards = await Scorecard.find({ round: round._id })
     .populate(
       "player",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .sort({ createdAt: 1 });
   const config = await Config.findOne({ key: "global" });

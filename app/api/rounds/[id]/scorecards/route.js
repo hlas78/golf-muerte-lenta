@@ -37,7 +37,7 @@ export async function GET(request, { params }) {
   const scorecards = await Scorecard.find({ round: id })
     .populate(
       "player",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .sort({ createdAt: 1 });
   const allAccepted =
@@ -159,7 +159,7 @@ export async function POST(request, { params }) {
           "holes.ohYes": true,
         }).populate(
           "player",
-          "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+          "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
         );
 
         if (existingOhYesCards.length === 0) {
@@ -445,7 +445,7 @@ export async function PUT(request, { params }) {
   const scorecards = await Scorecard.find({ round: round._id })
     .populate(
       "player",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .sort({ createdAt: 1 });
   const allAccepted =

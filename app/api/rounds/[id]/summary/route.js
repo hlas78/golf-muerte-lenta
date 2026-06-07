@@ -21,7 +21,7 @@ export async function GET(request, { params }) {
   const summary = buildSummary(payments);
   const scorecards = await Scorecard.find({ round: id }).populate(
     "player",
-    "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
   );
   return NextResponse.json({ payments, summary, scorecards });
 }

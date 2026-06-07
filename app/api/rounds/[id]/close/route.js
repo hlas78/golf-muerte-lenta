@@ -268,7 +268,7 @@ export async function POST(request, { params }) {
   const calcPopulatedScorecards = await Scorecard.find({ round: round._id })
     .populate(
       "player",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .sort({ createdAt: 1 });
   calcPopulatedScorecards.forEach((card) => {
@@ -366,7 +366,7 @@ export async function POST(request, { params }) {
   const populatedScorecards = await Scorecard.find({ round: round._id })
     .populate(
       "player",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .sort({ createdAt: 1 });
   const holeHandicapsByPlayer = {};

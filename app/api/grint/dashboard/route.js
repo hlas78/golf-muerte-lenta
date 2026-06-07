@@ -17,7 +17,7 @@ export async function GET(request) {
   }
   const payload = verifyToken(token);
   const user = await User.findById(payload.id).select(
-    "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+    "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
   );
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

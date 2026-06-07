@@ -24,7 +24,7 @@ export async function GET(request) {
   const status = request.nextUrl.searchParams.get("status");
   const query = status ? { status } : {};
   const users = await User.find(query)
-    .select("-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted")
+    .select("-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory")
     .sort({ name: 1 });
   return NextResponse.json(users);
 }

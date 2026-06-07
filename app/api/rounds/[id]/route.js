@@ -13,11 +13,11 @@ export async function GET(request, { params }) {
   const round = await Round.findById(id)
     .populate(
       "players",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .populate(
       "supervisor",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     );
   if (!round) {
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
@@ -112,11 +112,11 @@ export async function PATCH(request, { params }) {
   const updated = await Round.findById(id)
     .populate(
       "players",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     )
     .populate(
       "supervisor",
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     );
   return NextResponse.json(updated);
 }

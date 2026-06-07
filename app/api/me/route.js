@@ -14,7 +14,7 @@ export async function GET() {
   try {
     const payload = verifyToken(token);
     const user = await User.findById(payload.id).select(
-      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted"
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
     );
     return NextResponse.json({ user });
   } catch (error) {
