@@ -116,6 +116,7 @@ export async function POST(request, { params }) {
       groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
       teeName: tee?.tee_name || playerTee || "",
       courseHandicap,
+      grintDaysOutOfDate: user.grintDaysOutOfDate,
     });
     const existingCard = await Scorecard.findOne({
       round: round._id,

@@ -141,6 +141,7 @@ export async function POST(request, { params }) {
     groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
     teeName: selectedTee.tee_name,
     courseHandicap,
+    grintDaysOutOfDate: user.grintDaysOutOfDate,
   });
   const now = new Date();
   if (!round.startedAt || round.startedAt <= now) {

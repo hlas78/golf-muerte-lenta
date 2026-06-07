@@ -86,6 +86,7 @@ async function run() {
         groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
         teeName: selectedTee?.tee_name || teeName,
         courseHandicap,
+        grintDaysOutOfDate: player.grintDaysOutOfDate,
       });
       await sendMessage(player.phone, message);
       sent.add(String(player._id));

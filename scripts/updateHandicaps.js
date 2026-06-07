@@ -4,8 +4,13 @@ import readline from "readline";
 import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import { chromium } from "playwright";
+import {
+  fetchDashboardScores,
+  parseDashboardScoreDate,
+} from "../lib/grintDashboard.js";
 let connectDb;
 let User;
+let Round;
  
 
 function loadEnvFile(filename) {
@@ -121,11 +126,13 @@ async function extractHandicap(page, { userId }) {
   const valor = String(data?.index || "")
   if (valor.startsWith('~')) {
     value = Number.parseFloat(String(data?.index || "").split('~')[1].replace(/[^\d.-]/g, ""));
+  } else if (valor == ('NH')) {
+    value = Number.parseFloat(String(data?.index_ghap || "").split('~')[0].replace(/[^\d.-]/g, ""));
   } else if (String(data?.index || "").includes('~')) {
     value = Number.parseFloat(String(data?.index || "").split('~')[0].replace(/[^\d.-]/g, "")) + 1
   } else {
     value = Number.parseFloat(String(data?.index || "").split('~')[0].replace(/[^\d.-]/g, ""));
-  }
+  } 
   if (Number.isNaN(value)) {
     throw new Error(`No se pudo leer handicap desde API: ${valor} ${JSON.stringify(data)}`);
   }
@@ -138,8 +145,10 @@ async function run() {
   if (!connectDb || !User) {
     const dbModule = await import("../lib/db.js");
     const userModule = await import("../lib/models/User.js");
+    const roundModule = await import("../lib/models/Round.js");
     connectDb = dbModule.default;
     User = userModule.default;
+    Round = roundModule.default;
   }
 
   const email = process.env.GRINT_EMAIL || (await prompt({ label: "Email: " }));
@@ -167,17 +176,61 @@ async function run() {
 
   try {
     const sessionPage = await login(page, email, password);
+    const now = new Date();
     for (const user of users) {
       try {
         // console.log(`Actualizando handicap ${user.name}`)
         const handicap = await extractHandicap(sessionPage, {
           userId: user.grintId,
         });
+        const grintScoreHistory = await fetchDashboardScores(
+          sessionPage,
+          user.grintId
+        );
+        const latestGrintScoreAt = grintScoreHistory
+          .map((score) => parseDashboardScoreDate(score.date))
+          .filter((value) => value instanceof Date)
+          .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+        const latestRound = await Round.findOne({
+          players: user._id,
+          $or: [
+            { startedAt: { $lte: now } },
+            { startedAt: { $exists: false }, createdAt: { $lte: now } },
+            { startedAt: null, createdAt: { $lte: now } },
+          ],
+        })
+          .sort({ startedAt: -1, createdAt: -1 })
+          .select("startedAt createdAt")
+          .lean();
+        const latestGmlRoundAt =
+          latestRound?.startedAt || latestRound?.createdAt || null;
+        const grintDaysOutOfDate =
+          latestGmlRoundAt && latestGrintScoreAt
+            ? Math.max(
+                0,
+                Math.floor(
+                  (latestGmlRoundAt.getTime() - latestGrintScoreAt.getTime()) /
+                    (1000 * 60 * 60 * 24)
+                )
+              )
+            : null;
         await User.updateOne(
           { _id: user._id },
-          { handicap, grintLastSync: new Date() }
+          {
+            handicap,
+            grintLastSync: new Date(),
+            grintScoreHistory,
+            grintScoreHistorySyncedAt: new Date(),
+            grintLastScoreAt: latestGrintScoreAt,
+            gmlLastRoundAt: latestGmlRoundAt,
+            grintDaysOutOfDate,
+          }
         );
-        console.log(`Actualizado ${user.name}: ${handicap}\n`);
+        console.log(
+          `Actualizado ${user.name}: HC ${handicap}, scores ${grintScoreHistory.length}, desfase ${
+            grintDaysOutOfDate ?? "-"
+          } dias\n`
+        );
         const delayMs = Math.floor(1000 + Math.random() * 2000);
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       } catch (error) {

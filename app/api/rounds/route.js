@@ -257,6 +257,7 @@ export async function POST(request) {
             groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
             teeName,
             courseHandicap,
+            grintDaysOutOfDate: player.grintDaysOutOfDate,
           });
           console.log(`mensaje de bienvenida creado para ${player.name}`);
           return sendMessage(player.phone, message);
