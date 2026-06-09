@@ -1,21 +1,15 @@
 import connectDb from "../lib/db.js";
 import Round from "../lib/models/Round.js";
 import User from "../lib/models/User.js";
-import { buildWelcomeMessage } from "../lib/welcomeMessageBuilder.js";
+import {
+  buildWelcomeAccess,
+  buildWelcomeMessage,
+} from "../lib/welcomeMessageBuilder.js";
 import { getCourseHandicapForRound } from "../lib/scoring.js";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("./sendMessage");
-
-function buildRecordLink(roundId, token) {
-  const baseUrl = process.env.APP_URL || "http://localhost:3000";
-  const params = new URLSearchParams();
-  if (token) {
-    params.set("token", token);
-  }
-  return `${baseUrl}/rounds/${roundId}?${params.toString()}`;
-}
 
 async function run() {
   await connectDb();
@@ -76,12 +70,17 @@ async function run() {
             player.handicap || 0
           )
         : null;
-      const recordLink = buildRecordLink(round._id, player.magicToken);
+      const { recordLink, linkText } = buildWelcomeAccess(
+        round,
+        player,
+        player.magicToken
+      );
       const message = buildWelcomeMessage({
         campo,
         creatorName: creator?.name || "sin nombre",
         description: round.description || "",
         recordLink,
+        linkText,
         startedAt: round.startedAt,
         groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
         teeName: selectedTee?.tee_name || teeName,

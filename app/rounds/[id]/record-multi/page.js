@@ -121,15 +121,26 @@ export default function RecordMultiPage() {
     const tees = round?.courseSnapshot?.tees;
     return tees ? [...(tees.male || []), ...(tees.female || [])] : [];
   }, [round]);
+  const canManageAllGroups =
+    me?.role === "admin" || me?.role === "supervisor";
+  const myGroupNumber =
+    round?.playerGroups?.find(
+      (entry) => String(entry.player) === String(me?._id)
+    )?.group || null;
+  const isMarshalForGroup = Boolean(
+    myGroupNumber &&
+      round?.groupMarshals?.some(
+        (entry) =>
+          Number(entry.group) === Number(myGroupNumber) &&
+          String(entry.player) === String(me?._id)
+      )
+  );
+  const canCaptureGroup = canManageAllGroups || isMarshalForGroup;
 
   useEffect(() => {
     fetch("/api/me")
       .then((res) => res.json())
       .then((data) => {
-        if (data.user?.role !== "admin" && data.user?.role !== "supervisor") {
-          router.replace(`/rounds/${params?.id || ""}`);
-          return;
-        }
         setMe(data.user || null);
       })
       .catch(() => router.replace(`/rounds/${params?.id || ""}`));
@@ -150,6 +161,15 @@ export default function RecordMultiPage() {
         });
       });
   }, [params]);
+
+  useEffect(() => {
+    if (me == null || round == null) {
+      return;
+    }
+    if (!canCaptureGroup) {
+      router.replace(`/rounds/${params?.id || ""}`);
+    }
+  }, [canCaptureGroup, me, params, round, router]);
 
   const loadScorecards = () => {
     if (!params?.id) {
@@ -193,7 +213,7 @@ export default function RecordMultiPage() {
       if (notify) {
         notifications.show({
           title: "Vista actualizada",
-          message: "Se recargó la captura por hoyo.",
+          message: "Se recargó la captura de grupo.",
           color: "club",
         });
       }
@@ -237,15 +257,44 @@ export default function RecordMultiPage() {
   const isClosed = round?.status === "closed";
   const holeNumber = Number(selectedHole || 1);
   const players = useMemo(() => round?.players || [], [round]);
+  const capturablePlayers = useMemo(() => {
+    if (canManageAllGroups) {
+      return players;
+    }
+    if (!myGroupNumber) {
+      return [];
+    }
+    return players.filter((player) => {
+      const group = round?.playerGroups?.find(
+        (entry) => String(entry.player) === String(player._id)
+      )?.group;
+      return Number(group) === Number(myGroupNumber);
+    });
+  }, [canManageAllGroups, myGroupNumber, players, round?.playerGroups]);
+  const defaultSelectedPlayers = useMemo(() => {
+    if (!capturablePlayers.length) {
+      return [];
+    }
+    if (!myGroupNumber) {
+      return capturablePlayers;
+    }
+    const myGroupPlayers = capturablePlayers.filter((player) => {
+      const group = round?.playerGroups?.find(
+        (entry) => String(entry.player) === String(player._id)
+      )?.group;
+      return Number(group) === Number(myGroupNumber);
+    });
+    return myGroupPlayers.length > 0 ? myGroupPlayers : capturablePlayers;
+  }, [capturablePlayers, myGroupNumber, round?.playerGroups]);
   const playerOptions = useMemo(
     () =>
-      players.map((player) => ({
+      capturablePlayers.map((player) => ({
         value: player._id,
         label: `${player.name} · HC ${player.handicap ?? 0}`,
         name: player.name,
         handicap: player.handicap ?? 0,
       })),
-    [players]
+    [capturablePlayers]
   );
   const holeOptions = useMemo(
     () =>
@@ -257,52 +306,32 @@ export default function RecordMultiPage() {
   );
 
   useEffect(() => {
-    if (!players.length) {
+    if (!capturablePlayers.length) {
       return;
     }
-    const validPlayerIds = new Set(players.map((player) => String(player._id)));
+    const validPlayerIds = new Set(
+      capturablePlayers.map((player) => String(player._id))
+    );
     setSelectedPlayers((prev) => {
       const filtered = prev.filter((playerId) =>
         validPlayerIds.has(String(playerId))
       );
       return filtered.length === prev.length ? prev : filtered;
     });
-  }, [players]);
+  }, [capturablePlayers]);
 
   useEffect(() => {
     if (!round || !me || selectedPlayers.length > 0) {
       return;
     }
-    const meId = String(me._id || "");
-    if (!meId) {
+    if (!defaultSelectedPlayers.length) {
       return;
     }
-    const groupFromRound = round.playerGroups?.find(
-      (entry) => String(entry.player) === meId
-    )?.group;
-    const groupFromScorecard = scorecards.find(
-      (card) => String(card.player?._id) === meId
-    )?.group;
-    const group = groupFromRound || groupFromScorecard;
-    if (!group) {
-      return;
-    }
-    const groupPlayerIds = players
-      .filter((player) => {
-        const playerId = String(player?._id);
-        const fromRound = round.playerGroups?.find(
-          (entry) => String(entry.player) === playerId
-        )?.group;
-        const fromCard = scorecards.find(
-          (card) => String(card.player?._id) === playerId
-        )?.group;
-        return (fromRound || fromCard) === group;
-      })
-      .map((player) => player._id);
+    const groupPlayerIds = defaultSelectedPlayers.map((player) => player._id);
     if (groupPlayerIds.length > 0) {
       setSelectedPlayers(groupPlayerIds);
     }
-  }, [me, players, round, scorecards, selectedPlayers.length]);
+  }, [defaultSelectedPlayers, me, round, selectedPlayers.length]);
 
   const getCardForPlayer = (playerId) => {
     const existing = scorecards.find(
@@ -702,7 +731,7 @@ export default function RecordMultiPage() {
   return (
     <main className="gml-scorecard-compact">
       <AppShell
-        title="Captura por hoyo"
+        title="Captura grupo"
         // subtitle="Selecciona jugadores y registra un hoyo a la vez."
       >
         <Modal
@@ -749,7 +778,7 @@ export default function RecordMultiPage() {
                           variant={selected ? "filled" : "light"}
                           color={selected ? "club" : "dusk"}
                           onClick={() => togglePlayer(player.value)}
-                          disabled={isClosed}
+                          disabled={isClosed || !canManageAllGroups}
                         >
                           {selected ? "Quitar" : "Agregar"}
                         </Button>
@@ -764,16 +793,18 @@ export default function RecordMultiPage() {
             <Button
               variant="light"
               onClick={() =>
-                setSelectedPlayers(players.map((player) => player._id))
+                setSelectedPlayers(capturablePlayers.map((player) => player._id))
               }
-              disabled={isClosed || players.length === 0}
+              disabled={
+                isClosed || capturablePlayers.length === 0 || !canManageAllGroups
+              }
             >
               Seleccionar todos
             </Button>
             <Button
               variant="light"
               onClick={() => setSelectedPlayers([])}
-              disabled={isClosed || selectedPlayers.length === 0}
+              disabled={isClosed || selectedPlayers.length === 0 || !canManageAllGroups}
             >
               Limpiar
             </Button>

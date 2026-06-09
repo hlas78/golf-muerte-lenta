@@ -6,22 +6,16 @@ import Round from "@/lib/models/Round";
 import Scorecard from "@/lib/models/Scorecard";
 import User from "@/lib/models/User";
 import { verifyToken } from "@/lib/auth";
-import { buildWelcomeMessage } from "@/lib/welcomeMessageBuilder";
+import {
+  buildWelcomeAccess,
+  buildWelcomeMessage,
+} from "@/lib/welcomeMessageBuilder";
 import { getCourseHandicapForRound } from "@/lib/scoring";
 
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
-
-function buildRecordLink(roundId, token) {
-  const baseUrl = process.env.APP_URL || "http://localhost:3000";
-  const params = new URLSearchParams();
-  if (token) {
-    params.set("token", token);
-  }
-  return `${baseUrl}/rounds/${roundId}/record?${params.toString()}`;
-}
 
 export async function POST(request, { params }) {
   await connectDb();
@@ -106,12 +100,17 @@ export async function POST(request, { params }) {
       round,
       user.handicap
     );
-    const recordLink = buildRecordLink(round._id, user.magicToken);
+    const { recordLink, linkText } = buildWelcomeAccess(
+      round,
+      user,
+      user.magicToken
+    );
     const message = buildWelcomeMessage({
       campo,
       creatorName: creator?.name || "sin nombre",
       description: round.description || "",
       recordLink,
+      linkText,
       startedAt: round.startedAt,
       groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
       teeName: tee?.tee_name || playerTee || "",

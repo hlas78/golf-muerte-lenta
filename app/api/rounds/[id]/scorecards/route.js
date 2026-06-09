@@ -64,8 +64,31 @@ export async function POST(request, { params }) {
   if (!authUser) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const isSupervisor = authUser.role === "admin" || authUser.role === "supervisor";
-  if (!isSupervisor && String(payload.playerId) !== String(authPayload.id)) {
+  const isSupervisor =
+    authUser.role === "admin" || authUser.role === "supervisor";
+  const authGroup =
+    round.playerGroups?.find(
+      (entry) => String(entry.player) === String(authUser._id)
+    )?.group || null;
+  const targetGroup =
+    round.playerGroups?.find(
+      (entry) => String(entry.player) === String(payload.playerId)
+    )?.group || null;
+  const isMarshalForGroup = Boolean(
+    authGroup &&
+      targetGroup &&
+      Number(authGroup) === Number(targetGroup) &&
+      round.groupMarshals?.some(
+        (entry) =>
+          Number(entry.group) === Number(authGroup) &&
+          String(entry.player) === String(authUser._id)
+      )
+  );
+  if (
+    !isSupervisor &&
+    !isMarshalForGroup &&
+    String(payload.playerId) !== String(authPayload.id)
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const isInRound = round.players?.some(

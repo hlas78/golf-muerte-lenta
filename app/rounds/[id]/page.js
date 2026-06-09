@@ -593,6 +593,19 @@ export default function RoundDetailPage() {
   const canApprove = canManage;
   const isClosed = round?.status === "closed";
   const isAdmin = me?.role === "admin";
+  const myGroupNumber =
+    round?.playerGroups?.find(
+      (entry) => String(entry.player) === String(me?._id)
+    )?.group || null;
+  const isMarshalForGroup = Boolean(
+    myGroupNumber &&
+      round?.groupMarshals?.some(
+        (entry) =>
+          Number(entry.group) === Number(myGroupNumber) &&
+          String(entry.player) === String(me?._id)
+      )
+  );
+  const canCaptureGroup = canApprove || isMarshalForGroup;
   const canUploadAnyOwnGrint = useMemo(
     () =>
       Boolean(
@@ -2032,14 +2045,14 @@ export default function RoundDetailPage() {
                     Calcular pagos
                   </Button>
                 ) : null}
-                {canApprove ? (
+                {canCaptureGroup ? (
                   <Button
                     size="xs"
                     variant="light"
                     component={Link}
                     href={`/rounds/${params?.id}/record-multi`}
                   >
-                    Captura por hoyo
+                    Captura grupo
                   </Button>
                 ) : null}
                 {isAdmin ? (

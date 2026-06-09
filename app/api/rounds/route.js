@@ -9,20 +9,14 @@ import Config from "@/lib/models/Config";
 import User from "@/lib/models/User";
 import Scorecard from "@/lib/models/Scorecard";
 import { verifyToken } from "@/lib/auth";
-import { buildWelcomeMessage } from "@/lib/welcomeMessageBuilder";
+import {
+  buildWelcomeAccess,
+  buildWelcomeMessage,
+} from "@/lib/welcomeMessageBuilder";
 import { getCourseHandicapForRound } from "@/lib/scoring";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
-
-function buildRecordLink(roundId, token) {
-  const baseUrl = process.env.APP_URL || "http://localhost:3000";
-  const params = new URLSearchParams();
-  if (token) {
-    params.set("token", token);
-  }
-  return `${baseUrl}/rounds/${roundId}?${params.toString()}`;
-}
 
 async function getConfigSnapshot() {
   let config = await Config.findOne({ key: "global" });
@@ -277,12 +271,17 @@ export async function POST(request) {
                 player.handicap || 0
               )
             : null;
-          const recordLink = buildRecordLink(round._id, player.magicToken);
+          const { recordLink, linkText } = buildWelcomeAccess(
+            round,
+            player,
+            player.magicToken
+          );
           const message = buildWelcomeMessage({
             campo,
             creatorName: user?.name || "sin nombre",
             description: round.description || "",
             recordLink,
+            linkText,
             startedAt: round.startedAt,
             groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
             teeName,
