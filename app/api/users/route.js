@@ -52,6 +52,7 @@ export async function POST(request) {
     passwordHash,
     role: payload.role || "player",
     handicap: payload.handicap || 0,
+    grintId: payload.grintId ? String(payload.grintId).trim() : "",
     status: payload.status || "active",
     defaultTeeName,
     hasCart: Boolean(payload.hasCart),

@@ -22,9 +22,7 @@ export default function LoginPage() {
   const [registerName, setRegisterName] = useState("");
   const [registerHandicap, setRegisterHandicap] = useState("");
   const [loading, setLoading] = useState(false);
-  const [whatsAppLoading, setWhatsAppLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
-  const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
 
   const WhatsAppIcon = ({ size = 16 }) => (
     <svg
@@ -103,62 +101,13 @@ export default function LoginPage() {
     }
   };
 
-  const handleWhatsAppLogin = async () => {
-    if (!phone.trim()) {
-      setWhatsAppModalOpen(true);
-      return;
-    }
-    setWhatsAppLoading(true);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ phone, password: "" }),
-      });
-      let data = {};
-      try {
-        data = await res.json();
-      } catch (error) {
-        data = {};
-      }
-      if (res.ok) {
-        window.location.href = "/";
-        return;
-      }
-      const message =
-        data.error || "Te enviamos una liga por WhatsApp para ingresar.";
-      const sentByWhatsApp = /whatsapp/i.test(message);
-      notifications.show({
-        title: sentByWhatsApp ? "Liga enviada" : "No se pudo enviar",
-        message,
-        color: sentByWhatsApp ? "club" : "clay",
-      });
-    } catch (error) {
-      notifications.show({
-        title: "No se pudo enviar",
-        message: error.message || "Intenta mas tarde.",
-        color: "clay",
-      });
-    } finally {
-      setWhatsAppLoading(false);
-    }
+  const handleWhatsAppLogin = () => {
+    window.location.href = "https://wa.me/5215530967255?text=ingreso";
   };
 
   return (
     <main>
       <AppShell title="Ingreso" subtitle="Entra con tu usuario y clave.">
-        <Modal
-          opened={whatsAppModalOpen}
-          onClose={() => setWhatsAppModalOpen(false)}
-          title="Falta tu telefono"
-          centered
-        >
-          <Text size="sm" c="dusk.6" mb="md">
-            Primero captura tu numero telefonico para enviarte la liga.
-          </Text>
-          <Button onClick={() => setWhatsAppModalOpen(false)}>Entendido</Button>
-        </Modal>
         <Card>
           <form className="gml-form" onSubmit={handleLogin}>
             <TextInput
@@ -185,7 +134,6 @@ export default function LoginPage() {
                 variant="light"
                 color="club"
                 leftSection={<WhatsAppIcon size={18} />}
-                loading={whatsAppLoading}
                 onClick={handleWhatsAppLogin}
               >
                 Ingresar con WhatsApp
@@ -193,7 +141,8 @@ export default function LoginPage() {
             </Group>
           </form>
           <Text size="xs" mt="md" c="dusk.6">
-            Tu sesion se conserva en este dispositivo.
+            Tu sesión se conserva en este dispositivo. Si prefieres ingresar por
+            WhatsApp, te abriremos un chat con el mensaje listo para enviar.
           </Text>
         </Card>
 

@@ -560,29 +560,34 @@ export default function RecordMultiPage() {
           return null;
         }
         const holeMeta = getHoleMetaForPlayer(playerId);
-        const holes = (card.holes?.length
-          ? card.holes
-          : buildEmptyHoles(round.holes)
-        ).map(
-          (hole) => ({
-            ...hole,
-            par: holeMeta[hole.hole]?.par,
+        const activeHole =
+          (card.holes?.length
+            ? card.holes
+            : buildEmptyHoles(round.holes)
+          ).find((hole) => hole.hole === holeNumber) || {
+            hole: holeNumber,
+          };
+        const holes = [
+          {
+            ...activeHole,
+            par: holeMeta[activeHole.hole]?.par,
             strokes:
-              hole.strokes === "" || hole.strokes == null
+              activeHole.strokes === "" || activeHole.strokes == null
                 ? null
-                : Number(hole.strokes),
+                : Number(activeHole.strokes),
             putts:
-              hole.putts === "" || hole.putts == null
+              activeHole.putts === "" || activeHole.putts == null
                 ? null
-                : Number(hole.putts),
-          })
-        );
+                : Number(activeHole.putts),
+          },
+        ];
         return fetch(`/api/rounds/${params.id}/scorecards`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             playerId,
             holes,
+            mergeByHole: true,
           }),
         });
       });

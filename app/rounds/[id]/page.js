@@ -138,6 +138,7 @@ export default function RoundDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [uploadingCardId, setUploadingCardId] = useState(null);
   const [uploadConfirmCard, setUploadConfirmCard] = useState(null);
+  const [uploadPuttsWarningCard, setUploadPuttsWarningCard] = useState(null);
   const [teesModalOpen, setTeesModalOpen] = useState(false);
   const [groupsModalOpen, setGroupsModalOpen] = useState(false);
   const [savingGroups, setSavingGroups] = useState(false);
@@ -213,7 +214,7 @@ export default function RoundDetailPage() {
     if (!allowed) {
       return;
     }
-    fetch("/api/users")
+    fetch("/api/users?status=active")
       .then((res) => res.json())
       .then((data) => setAllUsers(Array.isArray(data) ? data : []))
       .catch(() => setAllUsers([]));
@@ -1311,6 +1312,22 @@ export default function RoundDetailPage() {
     } finally {
       setUploadingCardId(null);
     }
+  };
+
+  const hasPartialPuttsForGrintUpload = (card) => {
+    const holesToUpload = (card?.holes || []).filter(
+      (hole) => hole?.hole != null && hole.strokes != null && hole.strokes !== ""
+    );
+    if (holesToUpload.length === 0) {
+      return false;
+    }
+    const puttsCaptured = holesToUpload.filter(
+      (hole) => hole.putts != null && hole.putts !== ""
+    );
+    if (puttsCaptured.length === 0) {
+      return false;
+    }
+    return puttsCaptured.length < holesToUpload.length;
   };
 
   const handleExportRound = async () => {
@@ -3145,13 +3162,67 @@ export default function RoundDetailPage() {
             color="club"
             onClick={() => {
               if (uploadConfirmCard?._id) {
-                handleUploadGrint(uploadConfirmCard._id);
+                if (hasPartialPuttsForGrintUpload(uploadConfirmCard)) {
+                  setUploadPuttsWarningCard(uploadConfirmCard);
+                } else {
+                  handleUploadGrint(uploadConfirmCard._id);
+                }
               }
               setUploadConfirmCard(null);
             }}
             loading={uploadingCardId === uploadConfirmCard?._id}
           >
             Confirmar
+          </Button>
+        </Group>
+      </Modal>
+      <Modal
+        opened={Boolean(uploadPuttsWarningCard)}
+        onClose={() => setUploadPuttsWarningCard(null)}
+        title="Putts incompletos"
+        centered
+      >
+        {uploadPuttsWarningCard ? (
+          <>
+            <Text size="sm" c="dusk.6" mb="sm">
+              La captura de putts está incompleta. Si continúas, la tarjeta se
+              subirá a TheGrint sin putts.
+            </Text>
+            <Text fw={600}>
+              {uploadPuttsWarningCard.player?.name || "Jugador"}
+            </Text>
+            <Text size="sm" c="dusk.6">
+              Puedes cancelar para regresar y completar la tarjeta antes de
+              subirla.
+            </Text>
+          </>
+        ) : null}
+        <Group justify="flex-end" mt="md">
+          <Button
+            variant="light"
+            onClick={() => {
+              const playerId = uploadPuttsWarningCard?.player?._id;
+              setUploadPuttsWarningCard(null);
+              if (playerId) {
+                router.push(
+                  `/rounds/${params?.id}/record?playerId=${playerId}`
+                );
+              }
+            }}
+          >
+            Cancelar y editar tarjeta
+          </Button>
+          <Button
+            color="club"
+            onClick={() => {
+              if (uploadPuttsWarningCard?._id) {
+                handleUploadGrint(uploadPuttsWarningCard._id);
+              }
+              setUploadPuttsWarningCard(null);
+            }}
+            loading={uploadingCardId === uploadPuttsWarningCard?._id}
+          >
+            Subir sin putts
           </Button>
         </Group>
       </Modal>

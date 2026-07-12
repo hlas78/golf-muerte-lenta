@@ -14,6 +14,7 @@ import {
   normalizeHoleHandicaps,
 } from "@/lib/scoring";
 import { verifyToken } from "@/lib/auth";
+import { sendMessageWithRandomDelay } from "@/lib/welcomeMessageDispatch";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
@@ -644,9 +645,13 @@ export async function POST(request, { params }) {
         messages.push(whatsappMessage);
       });
       return Promise.allSettled(
-        messages.map((message) => {
-          sendMessage(player.phone, message.replace('Hoyo Hoyo', 'Hoyo'));
-        })
+        messages.map((message) =>
+          sendMessageWithRandomDelay(
+            sendMessage,
+            player.phone,
+            message.replace("Hoyo Hoyo", "Hoyo")
+          )
+        )
       );
     })
   );

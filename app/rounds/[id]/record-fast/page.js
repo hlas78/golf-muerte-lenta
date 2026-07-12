@@ -228,22 +228,29 @@ export default function RecordFastPage() {
         if (card.accepted || isClosed) {
           return null;
         }
-        const holes = (card.holes?.length
-          ? card.holes
-          : buildEmptyHoles(round.holes)
-        ).map((hole) => ({
-          ...hole,
-          strokes:
-            hole.strokes === "" || hole.strokes == null
-              ? null
-              : Number(hole.strokes),
-        }));
+        const activeHole =
+          (card.holes?.length
+            ? card.holes
+            : buildEmptyHoles(round.holes)
+          ).find((hole) => hole.hole === holeNumber) || {
+            hole: holeNumber,
+          };
+        const holes = [
+          {
+            ...activeHole,
+            strokes:
+              activeHole.strokes === "" || activeHole.strokes == null
+                ? null
+                : Number(activeHole.strokes),
+          },
+        ];
         return fetch(`/api/rounds/${params.id}/scorecards`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             playerId,
             holes,
+            mergeByHole: true,
           }),
         });
       });

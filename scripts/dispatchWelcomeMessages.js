@@ -3,8 +3,10 @@ import Round from "../lib/models/Round.js";
 import User from "../lib/models/User.js";
 import {
   buildWelcomeAccess,
+  getWelcomeAccessContext,
   buildWelcomeMessage,
 } from "../lib/welcomeMessageBuilder.js";
+import { sendMessageWithRandomDelay } from "../lib/welcomeMessageDispatch.js";
 import { getCourseHandicapForRound } from "../lib/scoring.js";
 import { createRequire } from "module";
 
@@ -46,6 +48,10 @@ async function run() {
       : null;
 
     for (const player of participants) {
+      const { shouldSendWelcomeMessage } = getWelcomeAccessContext(round, player);
+      if (!shouldSendWelcomeMessage) {
+        continue;
+      }
       if (!player.magicToken) {
         player.magicToken = require("crypto").randomBytes(24).toString("hex");
         player.magicTokenCreatedAt = new Date();
@@ -87,7 +93,11 @@ async function run() {
         courseHandicap,
         grintDaysOutOfDate: player.grintDaysOutOfDate,
       });
-      await sendMessage(player.phone, message);
+      await sendMessageWithRandomDelay(
+        sendMessage,
+        player.phone,
+        message
+      );
       sent.add(String(player._id));
     }
 

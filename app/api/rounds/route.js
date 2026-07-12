@@ -11,8 +11,10 @@ import Scorecard from "@/lib/models/Scorecard";
 import { verifyToken } from "@/lib/auth";
 import {
   buildWelcomeAccess,
+  getWelcomeAccessContext,
   buildWelcomeMessage,
 } from "@/lib/welcomeMessageBuilder";
+import { sendMessageWithRandomDelay } from "@/lib/welcomeMessageDispatch";
 import { getCourseHandicapForRound } from "@/lib/scoring";
 
 const require = createRequire(import.meta.url);
@@ -131,6 +133,22 @@ export async function POST(request) {
       : [],
     amount: Number(payload?.culebra?.amount) || 0,
   };
+  const playerIds = Array.isArray(payload.players)
+    ? Array.from(new Set(payload.players.map(String)))
+    : [];
+  let participants = [];
+  if (playerIds.length > 0) {
+    participants = await User.find({
+      _id: { $in: playerIds },
+      status: "active",
+    });
+    if (participants.length !== playerIds.length) {
+      return NextResponse.json(
+        { error: "Solo se pueden agregar jugadores activos." },
+        { status: 400 }
+      );
+    }
+  }
   const round = await Round.create({
     course: course?._id,
     courseSnapshot: course,
@@ -152,9 +170,6 @@ export async function POST(request) {
     startedAt,
   });
   console.log('round: ', round)
-  const playerIds = Array.isArray(payload.players)
-    ? Array.from(new Set(payload.players.map(String)))
-    : [];
   console.log('players:', playerIds)
   if (playerIds.length > 0) {
     const tees = course?.tees || {};
@@ -182,7 +197,6 @@ export async function POST(request) {
           return acc;
         }, {})
       : {};
-    const participants = await User.find({ _id: { $in: playerIds } });
     const teeByPlayer = new Map();
     participants.forEach((player) => {
       const requested = requestedTees[String(player._id)];
@@ -249,8 +263,11 @@ export async function POST(request) {
       "el campo";
     const now = new Date();
     if (round.startedAt && round.startedAt <= now) {
+      const welcomeRecipients = participants.filter(
+        (player) => getWelcomeAccessContext(round, player).shouldSendWelcomeMessage
+      );
       await Promise.allSettled(
-        participants.map(async (player) => {
+        welcomeRecipients.map(async (player) => {
           if (!player.magicToken) {
             player.magicToken = crypto.randomBytes(24).toString("hex");
             player.magicTokenCreatedAt = new Date();
@@ -289,12 +306,18 @@ export async function POST(request) {
             grintDaysOutOfDate: player.grintDaysOutOfDate,
           });
           console.log(`mensaje de bienvenida creado para ${player.name}`);
-          return sendMessage(player.phone, message);
+          return sendMessageWithRandomDelay(
+            sendMessage,
+            player.phone,
+            message
+          );
         })
       );
-      round.welcomeSentAt = new Date();
-      round.welcomeSentPlayers = playerIds;
-      await round.save();
+      if (welcomeRecipients.length > 0) {
+        round.welcomeSentAt = new Date();
+        round.welcomeSentPlayers = welcomeRecipients.map((player) => player._id);
+        await round.save();
+      }
     }
   }
 

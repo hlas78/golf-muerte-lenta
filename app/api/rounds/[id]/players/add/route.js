@@ -8,6 +8,7 @@ import User from "@/lib/models/User";
 import { verifyToken } from "@/lib/auth";
 import {
   buildWelcomeAccess,
+  getWelcomeAccessContext,
   buildWelcomeMessage,
 } from "@/lib/welcomeMessageBuilder";
 import { getCourseHandicapForRound } from "@/lib/scoring";
@@ -47,6 +48,12 @@ export async function POST(request, { params }) {
   const user = await User.findById(playerId);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  if (user.status !== "active") {
+    return NextResponse.json(
+      { error: "Solo se pueden agregar jugadores activos." },
+      { status: 400 }
+    );
   }
 
   const tees = round.courseSnapshot?.tees || {};
@@ -116,34 +123,35 @@ export async function POST(request, { params }) {
   const campo =
     round.courseSnapshot?.clubName || round.courseSnapshot?.courseName || "el campo";
   const creator = round.createdBy ? await User.findById(round.createdBy) : null;
-  const { recordLink, linkText } = buildWelcomeAccess(
-    round,
-    user,
-    user.magicToken
-  );
-  const courseHandicap = getCourseHandicapForRound(
-    selectedTee,
-    round,
-    user.handicap
-  );
-  const groupNumber =
-    round.playerGroups?.find(
-      (entry) => String(entry.player) === String(user._id)
-    )?.group || null;
-  const message = buildWelcomeMessage({
-    campo,
-    creatorName: creator?.name || "sin nombre",
-    description: round.description || "",
-    recordLink,
-    linkText,
-    startedAt: round.startedAt,
-    groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
-    teeName: selectedTee.tee_name,
-    courseHandicap,
-    grintDaysOutOfDate: user.grintDaysOutOfDate,
-  });
   const now = new Date();
-  if (!round.startedAt || round.startedAt <= now) {
+  const { shouldSendWelcomeMessage } = getWelcomeAccessContext(round, user);
+  if ((!round.startedAt || round.startedAt <= now) && shouldSendWelcomeMessage) {
+    const { recordLink, linkText } = buildWelcomeAccess(
+      round,
+      user,
+      user.magicToken
+    );
+    const courseHandicap = getCourseHandicapForRound(
+      selectedTee,
+      round,
+      user.handicap
+    );
+    const groupNumber =
+      round.playerGroups?.find(
+        (entry) => String(entry.player) === String(user._id)
+      )?.group || null;
+    const message = buildWelcomeMessage({
+      campo,
+      creatorName: creator?.name || "sin nombre",
+      description: round.description || "",
+      recordLink,
+      linkText,
+      startedAt: round.startedAt,
+      groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
+      teeName: selectedTee.tee_name,
+      courseHandicap,
+      grintDaysOutOfDate: user.grintDaysOutOfDate,
+    });
     await sendMessage(user.phone, message);
     round.welcomeSentAt = round.welcomeSentAt || new Date();
     round.welcomeSentPlayers = round.welcomeSentPlayers || [];

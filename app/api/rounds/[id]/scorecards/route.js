@@ -31,6 +31,20 @@ const OH_YES_LOST_MESSAGES = [
   "Se fue el Oh yes del hoyo {hole}. {player} llegó más cerquita. 😅⛳️",
 ];
 
+function buildEmptyHoles(count) {
+  return Array.from({ length: count || 0 }, (_, idx) => ({
+    hole: idx + 1,
+    strokes: null,
+    putts: null,
+    ohYes: false,
+    sandy: false,
+    penalties: [],
+    bunker: false,
+    water: false,
+    holeOut: false,
+  }));
+}
+
 export async function GET(request, { params }) {
   await connectDb();
   const { id } = await params;
@@ -120,7 +134,7 @@ export async function POST(request, { params }) {
     round,
     player.handicap
   );
-  console.log(`${round.courseSnapshot.clubName} handicap: ${courseHandicap}`)
+  console.log(`${player.phone} ${player.name} - ${round.courseSnapshot.clubName} handicap: ${courseHandicap}`)
   const normalizedTeeHoles = normalizeHoleHandicaps(tee?.holes || [], round);
   const parByHole = normalizedTeeHoles.reduce((acc, hole, idx) => {
     acc[hole.hole ?? idx + 1] = hole.par;
@@ -132,11 +146,31 @@ export async function POST(request, { params }) {
       handicap: hole.handicap,
     })) || [];
 
-  const holes = payload.holes || [];
   const previous = await Scorecard.findOne({
     round: round._id,
     player: player._id,
   });
+  const incomingHoles = Array.isArray(payload.holes) ? payload.holes : [];
+  let holes = incomingHoles;
+  if (payload.mergeByHole) {
+    const previousHoles = Array.isArray(previous?.holes)
+      ? previous.holes.map((hole) =>
+          typeof hole?.toObject === "function" ? hole.toObject() : { ...hole }
+        )
+      : [];
+    const baseHoles =
+      previousHoles.length > 0 ? previousHoles : buildEmptyHoles(round.holes);
+    const updatesByHole = new Map(
+      incomingHoles
+        .filter((hole) => Number.isFinite(Number(hole?.hole)))
+        .map((hole) => [Number(hole.hole), hole])
+    );
+    holes = baseHoles.map((hole) =>
+      updatesByHole.has(Number(hole.hole))
+        ? { ...hole, ...updatesByHole.get(Number(hole.hole)) }
+        : hole
+    );
+  }
   const grossTotal = holes
     .slice(0, round.holes)
     .reduce((sum, hole) => sum + (hole.strokes || 0), 0);

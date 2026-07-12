@@ -8,6 +8,7 @@ import User from "@/lib/models/User";
 import { verifyToken } from "@/lib/auth";
 import {
   buildWelcomeAccess,
+  getWelcomeAccessContext,
   buildWelcomeMessage,
 } from "@/lib/welcomeMessageBuilder";
 import { getCourseHandicapForRound } from "@/lib/scoring";
@@ -37,6 +38,12 @@ export async function POST(request, { params }) {
   const user = await User.findById(payload.playerId);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  if (user.status !== "active") {
+    return NextResponse.json(
+      { error: "Solo los jugadores activos pueden unirse a la jugada." },
+      { status: 400 }
+    );
   }
   if (round.status === "closed") {
     return NextResponse.json({ error: "Round closed" }, { status: 400 });
@@ -100,23 +107,6 @@ export async function POST(request, { params }) {
       round,
       user.handicap
     );
-    const { recordLink, linkText } = buildWelcomeAccess(
-      round,
-      user,
-      user.magicToken
-    );
-    const message = buildWelcomeMessage({
-      campo,
-      creatorName: creator?.name || "sin nombre",
-      description: round.description || "",
-      recordLink,
-      linkText,
-      startedAt: round.startedAt,
-      groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
-      teeName: tee?.tee_name || playerTee || "",
-      courseHandicap,
-      grintDaysOutOfDate: user.grintDaysOutOfDate,
-    });
     const existingCard = await Scorecard.findOne({
       round: round._id,
       player: user._id,
@@ -141,7 +131,25 @@ export async function POST(request, { params }) {
       });
     }
     const now = new Date();
-    if (!round.startedAt || round.startedAt <= now) {
+    const { shouldSendWelcomeMessage } = getWelcomeAccessContext(round, user);
+    if ((!round.startedAt || round.startedAt <= now) && shouldSendWelcomeMessage) {
+      const { recordLink, linkText } = buildWelcomeAccess(
+        round,
+        user,
+        user.magicToken
+      );
+      const message = buildWelcomeMessage({
+        campo,
+        creatorName: creator?.name || "sin nombre",
+        description: round.description || "",
+        recordLink,
+        linkText,
+        startedAt: round.startedAt,
+        groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
+        teeName: tee?.tee_name || playerTee || "",
+        courseHandicap,
+        grintDaysOutOfDate: user.grintDaysOutOfDate,
+      });
       await sendMessage(user.phone, message);
       round.welcomeSentAt = round.welcomeSentAt || new Date();
       round.welcomeSentPlayers = round.welcomeSentPlayers || [];
