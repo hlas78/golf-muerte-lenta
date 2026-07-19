@@ -2,16 +2,14 @@ import connectDb from "../lib/db.js";
 import Round from "../lib/models/Round.js";
 import User from "../lib/models/User.js";
 import {
-  buildWelcomeAccess,
-  getWelcomeAccessContext,
-  buildWelcomeMessage,
+  buildRoundWelcomeGroupMessage,
 } from "../lib/welcomeMessageBuilder.js";
-import { sendMessageWithRandomDelay } from "../lib/welcomeMessageDispatch.js";
 import { getCourseHandicapForRound } from "../lib/scoring.js";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("./sendMessage");
+const WELCOME_GROUP_ID = "120363405357623444@g.us";
 
 async function run() {
   await connectDb();
@@ -23,86 +21,59 @@ async function run() {
   });
 
   for (const round of rounds) {
+    if (round.welcomeSentAt) {
+      continue;
+    }
     const playerIds = Array.isArray(round.players)
       ? round.players.map(String)
       : [];
     if (playerIds.length === 0) {
       continue;
     }
-    const sent = new Set(
-      Array.isArray(round.welcomeSentPlayers)
-        ? round.welcomeSentPlayers.map(String)
-        : []
-    );
-    const pendingIds = playerIds.filter((id) => !sent.has(id));
-    if (pendingIds.length === 0) {
-      continue;
-    }
-    const participants = await User.find({ _id: { $in: pendingIds } });
+    const participants = await User.find({ _id: { $in: playerIds } });
     const campo =
       round.courseSnapshot?.clubName ||
       round.courseSnapshot?.courseName ||
       "el campo";
-    const creator = round.createdBy
-      ? await User.findById(round.createdBy)
-      : null;
-
-    for (const player of participants) {
-      const { shouldSendWelcomeMessage } = getWelcomeAccessContext(round, player);
-      if (!shouldSendWelcomeMessage) {
-        continue;
-      }
-      if (!player.magicToken) {
-        player.magicToken = require("crypto").randomBytes(24).toString("hex");
-        player.magicTokenCreatedAt = new Date();
-        await player.save();
-      }
-      const tees = round.courseSnapshot?.tees || {};
-      const allTees = [...(tees.male || []), ...(tees.female || [])];
-      const teeName =
-        round.playerTees?.find(
-          (entry) => String(entry.player) === String(player._id)
-        )?.teeName || "";
-      const groupNumber =
-        round.playerGroups?.find(
-          (entry) => String(entry.player) === String(player._id)
-        )?.group || null;
-      const selectedTee =
-        allTees.find((option) => option.tee_name === teeName) || allTees[0];
-      const courseHandicap = selectedTee
-        ? getCourseHandicapForRound(
-            selectedTee,
-            round,
-            player.handicap || 0
-          )
-        : null;
-      const { recordLink, linkText } = buildWelcomeAccess(
-        round,
-        player,
-        player.magicToken
-      );
-      const message = buildWelcomeMessage({
-        campo,
-        creatorName: creator?.name || "sin nombre",
-        description: round.description || "",
-        recordLink,
-        linkText,
-        startedAt: round.startedAt,
-        groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
-        teeName: selectedTee?.tee_name || teeName,
-        courseHandicap,
-        grintDaysOutOfDate: player.grintDaysOutOfDate,
-      });
-      await sendMessageWithRandomDelay(
-        sendMessage,
-        player.phone,
-        message
-      );
-      sent.add(String(player._id));
-    }
+    const tees = round.courseSnapshot?.tees || {};
+    const allTees = [...(tees.male || []), ...(tees.female || [])];
+    const roster = participants
+      .map((player) => {
+        const teeName =
+          round.playerTees?.find(
+            (entry) => String(entry.player) === String(player._id)
+          )?.teeName || "";
+        const selectedTee =
+          allTees.find((option) => option.tee_name === teeName) || allTees[0];
+        const courseHandicap = selectedTee
+          ? getCourseHandicapForRound(
+              selectedTee,
+              round,
+              player.handicap || 0
+            )
+          : null;
+        return {
+          name: player.name,
+          handicap: player.handicap ?? 0,
+          teeName: selectedTee?.tee_name || teeName,
+          courseHandicap,
+          group:
+            round.playerGroups?.find(
+              (entry) => String(entry.player) === String(player._id)
+            )?.group || 99,
+        };
+      })
+      .sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name));
+    const message = buildRoundWelcomeGroupMessage({
+      campo,
+      description: round.description || "",
+      startedAt: round.startedAt,
+      players: roster,
+    });
+    await sendMessage(WELCOME_GROUP_ID, message);
 
     round.welcomeSentAt = new Date();
-    round.welcomeSentPlayers = Array.from(sent);
+    round.welcomeSentPlayers = playerIds;
     await round.save();
   }
 }

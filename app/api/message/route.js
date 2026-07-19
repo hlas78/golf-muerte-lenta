@@ -3,12 +3,18 @@ import crypto from "crypto";
 import { createRequire } from "module";
 import connectDb from "@/lib/db";
 import Round from "@/lib/models/Round";
+import Scorecard from "@/lib/models/Scorecard";
+import Payment from "@/lib/models/Payment";
 import User from "@/lib/models/User";
 import {
   buildWelcomeAccess,
   buildWelcomeMessage,
 } from "@/lib/welcomeMessageBuilder";
 import { getCourseHandicapForRound } from "@/lib/scoring";
+import {
+  SARCASTIC_MESSAGES,
+  buildPlayerSettlementMessages,
+} from "@/lib/settlementMessages";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
@@ -30,7 +36,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
   const inboundMessage = String(payload.message || "").trim().toLowerCase();
-  if (inboundMessage !== "ingreso") {
+  if (!["ingreso", "cuentas"].includes(inboundMessage)) {
     return NextResponse.json({ ok: true, action: "ignored-message" });
   }
 
@@ -48,6 +54,70 @@ export async function POST(request) {
   });
   if (!user) {
     return NextResponse.json({ ok: true, action: "ignored" });
+  }
+
+  if (inboundMessage === "cuentas") {
+    const round = await Round.findOne({
+      status: "closed",
+      players: user._id,
+    }).sort({ endedAt: -1, startedAt: -1, createdAt: -1 });
+
+    if (!round) {
+      await sendMessage(
+        user.phone,
+        "No encontré una jugada cerrada para compartirte cuentas."
+      );
+      return NextResponse.json({ ok: true, action: "no-closed-round" });
+    }
+
+    const payments = await Payment.find({ round: round._id });
+    if (payments.length === 0) {
+      await sendMessage(
+        user.phone,
+        "Tu última jugada cerrada no tiene cuentas registradas."
+      );
+      return NextResponse.json({ ok: true, action: "no-payments" });
+    }
+
+    const participants = await User.find({
+      _id: { $in: Array.from(new Set(round.players || [])) },
+    });
+    const populatedScorecards = await Scorecard.find({ round: round._id })
+      .populate(
+        "player",
+        "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
+      )
+      .sort({ createdAt: 1 });
+    const randomMessage = `☠️ ${
+      SARCASTIC_MESSAGES[Math.floor(Math.random() * SARCASTIC_MESSAGES.length)]
+    } ☠️`;
+    const messagesByPlayerId = buildPlayerSettlementMessages({
+      round,
+      payments,
+      participants,
+      populatedScorecards,
+      randomMessage,
+    });
+    const messages = messagesByPlayerId[String(user._id)] || [];
+
+    if (messages.length === 0) {
+      await sendMessage(
+        user.phone,
+        "No encontré cuentas pendientes para tu última jugada cerrada."
+      );
+      return NextResponse.json({ ok: true, action: "no-player-messages" });
+    }
+
+    for (const message of messages) {
+      await sendMessage(user.phone, message);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      action: "accounts-sent",
+      roundId: String(round._id),
+      userId: String(user._id),
+    });
   }
 
   const round = await Round.findOne({

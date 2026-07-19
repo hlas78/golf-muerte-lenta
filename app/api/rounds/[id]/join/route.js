@@ -6,17 +6,14 @@ import Round from "@/lib/models/Round";
 import Scorecard from "@/lib/models/Scorecard";
 import User from "@/lib/models/User";
 import { verifyToken } from "@/lib/auth";
-import {
-  buildWelcomeAccess,
-  getWelcomeAccessContext,
-  buildWelcomeMessage,
-} from "@/lib/welcomeMessageBuilder";
+import { buildRoundWelcomeGroupMessage } from "@/lib/welcomeMessageBuilder";
 import { getCourseHandicapForRound } from "@/lib/scoring";
 
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
+const WELCOME_GROUP_ID = "120363405357623444@g.us";
 
 export async function POST(request, { params }) {
   await connectDb();
@@ -131,32 +128,46 @@ export async function POST(request, { params }) {
       });
     }
     const now = new Date();
-    const { shouldSendWelcomeMessage } = getWelcomeAccessContext(round, user);
-    if ((!round.startedAt || round.startedAt <= now) && shouldSendWelcomeMessage) {
-      const { recordLink, linkText } = buildWelcomeAccess(
-        round,
-        user,
-        user.magicToken
-      );
-      const message = buildWelcomeMessage({
+    if ((!round.startedAt || round.startedAt <= now) && !round.welcomeSentAt) {
+      const participantIds = Array.from(new Set(round.players || [])).map(String);
+      const participants = await User.find({ _id: { $in: participantIds } });
+      const roster = participants
+        .map((participant) => {
+          const participantTeeName =
+            round.playerTees?.find(
+              (entry) => String(entry.player) === String(participant._id)
+            )?.teeName || "";
+          const participantTee =
+            allTees.find((option) => option.tee_name === participantTeeName) ||
+            allTees[0];
+          return {
+            name: participant.name,
+            handicap: participant.handicap ?? 0,
+            teeName: participantTee?.tee_name || participantTeeName,
+            courseHandicap: participantTee
+              ? getCourseHandicapForRound(
+                  participantTee,
+                  round,
+                  participant.handicap
+                )
+              : null,
+            group:
+              round.playerGroups?.find(
+                (entry) => String(entry.player) === String(participant._id)
+              )?.group || 99,
+          };
+        })
+        .sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name));
+      const message = buildRoundWelcomeGroupMessage({
         campo,
-        creatorName: creator?.name || "sin nombre",
         description: round.description || "",
-        recordLink,
-        linkText,
         startedAt: round.startedAt,
-        groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
-        teeName: tee?.tee_name || playerTee || "",
-        courseHandicap,
-        grintDaysOutOfDate: user.grintDaysOutOfDate,
+        players: roster,
       });
-      await sendMessage(user.phone, message);
-      round.welcomeSentAt = round.welcomeSentAt || new Date();
-      round.welcomeSentPlayers = round.welcomeSentPlayers || [];
-      if (!round.welcomeSentPlayers.find((id) => String(id) === String(user._id))) {
-        round.welcomeSentPlayers.push(user._id);
-        await round.save();
-      }
+      await sendMessage(WELCOME_GROUP_ID, message);
+      round.welcomeSentAt = new Date();
+      round.welcomeSentPlayers = participantIds;
+      await round.save();
     }
   }
   return NextResponse.json({ ok: true });

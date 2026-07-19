@@ -10,15 +10,13 @@ import User from "@/lib/models/User";
 import Scorecard from "@/lib/models/Scorecard";
 import { verifyToken } from "@/lib/auth";
 import {
-  buildWelcomeAccess,
-  getWelcomeAccessContext,
-  buildWelcomeMessage,
+  buildRoundWelcomeGroupMessage,
 } from "@/lib/welcomeMessageBuilder";
-import { sendMessageWithRandomDelay } from "@/lib/welcomeMessageDispatch";
 import { getCourseHandicapForRound } from "@/lib/scoring";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
+const WELCOME_GROUP_ID = "120363405357623444@g.us";
 
 async function getConfigSnapshot() {
   let config = await Config.findOne({ key: "global" });
@@ -262,23 +260,11 @@ export async function POST(request) {
       round.courseSnapshot?.courseName ||
       "el campo";
     const now = new Date();
-    if (round.startedAt && round.startedAt <= now) {
-      const welcomeRecipients = participants.filter(
-        (player) => getWelcomeAccessContext(round, player).shouldSendWelcomeMessage
-      );
-      await Promise.allSettled(
-        welcomeRecipients.map(async (player) => {
-          if (!player.magicToken) {
-            player.magicToken = crypto.randomBytes(24).toString("hex");
-            player.magicTokenCreatedAt = new Date();
-            await player.save();
-          }
+    if (round.startedAt && round.startedAt <= now && !round.welcomeSentAt) {
+      const roster = participants
+        .map((player) => {
           const teeName =
             teeByPlayer.get(String(player._id)) || defaultTeeName || "";
-          const groupNumber =
-            round.playerGroups?.find(
-              (entry) => String(entry.player) === String(player._id)
-            )?.group || null;
           const selectedTee =
             allTees.find((option) => option.tee_name === teeName) || allTees[0];
           const courseHandicap = selectedTee
@@ -288,36 +274,28 @@ export async function POST(request) {
                 player.handicap || 0
               )
             : null;
-          const { recordLink, linkText } = buildWelcomeAccess(
-            round,
-            player,
-            player.magicToken
-          );
-          const message = buildWelcomeMessage({
-            campo,
-            creatorName: user?.name || "sin nombre",
-            description: round.description || "",
-            recordLink,
-            linkText,
-            startedAt: round.startedAt,
-            groupLabel: groupNumber ? `Grupo ${groupNumber}` : "",
+          return {
+            name: player.name,
+            handicap: player.handicap ?? 0,
             teeName,
             courseHandicap,
-            grintDaysOutOfDate: player.grintDaysOutOfDate,
-          });
-          console.log(`mensaje de bienvenida creado para ${player.name}`);
-          return sendMessageWithRandomDelay(
-            sendMessage,
-            player.phone,
-            message
-          );
+            group:
+              round.playerGroups?.find(
+                (entry) => String(entry.player) === String(player._id)
+              )?.group || 99,
+          };
         })
-      );
-      if (welcomeRecipients.length > 0) {
-        round.welcomeSentAt = new Date();
-        round.welcomeSentPlayers = welcomeRecipients.map((player) => player._id);
-        await round.save();
-      }
+        .sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name));
+      const message = buildRoundWelcomeGroupMessage({
+        campo,
+        description: round.description || "",
+        startedAt: round.startedAt,
+        players: roster,
+      });
+      await sendMessage(WELCOME_GROUP_ID, message);
+      round.welcomeSentAt = new Date();
+      round.welcomeSentPlayers = playerIds;
+      await round.save();
     }
   }
 
