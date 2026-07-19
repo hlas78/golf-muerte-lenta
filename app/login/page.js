@@ -102,7 +102,7 @@ export default function LoginPage() {
   };
 
   const handleWhatsAppLogin = () => {
-    window.location.href = "https://wa.me/5215530967255?text=ingreso";
+    window.location.href = "https://wa.me/5215664089788?text=ingreso";
   };
 
   return (
