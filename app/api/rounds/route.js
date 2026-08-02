@@ -18,6 +18,83 @@ const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
 const WELCOME_GROUP_ID = "120363405357623444@g.us";
 
+async function dispatchRoundWelcomeMessage(roundId) {
+  await connectDb();
+  const round = await Round.findById(roundId).lean();
+  if (!round || round.welcomeSentAt) {
+    return;
+  }
+
+  const playerIds = Array.isArray(round.players)
+    ? Array.from(new Set(round.players.map(String)))
+    : [];
+  if (playerIds.length === 0) {
+    return;
+  }
+
+  const participants = await User.find({
+    _id: { $in: playerIds },
+    status: "active",
+  }).lean();
+  if (!participants.length) {
+    return;
+  }
+
+  const tees = round.courseSnapshot?.tees || {};
+  const allTees = [...(tees.male || []), ...(tees.female || [])];
+  const defaultTeeName =
+    allTees.find((option) => option.tee_name === "BLANCAS")?.tee_name ||
+    allTees[0]?.tee_name ||
+    round.teeName ||
+    "";
+  const teeByPlayer = new Map(
+    Array.isArray(round.playerTees)
+      ? round.playerTees.map((entry) => [String(entry.player), entry.teeName])
+      : []
+  );
+  const campo =
+    round.courseSnapshot?.clubName ||
+    round.courseSnapshot?.courseName ||
+    "el campo";
+  const roster = participants
+    .map((player) => {
+      const teeName = teeByPlayer.get(String(player._id)) || defaultTeeName;
+      const selectedTee =
+        allTees.find((option) => option.tee_name === teeName) || allTees[0];
+      const courseHandicap = selectedTee
+        ? getCourseHandicapForRound(selectedTee, round, player.handicap || 0)
+        : null;
+      return {
+        name: player.name,
+        handicap: player.handicap ?? 0,
+        teeName,
+        courseHandicap,
+        group:
+          round.playerGroups?.find(
+            (entry) => String(entry.player) === String(player._id)
+          )?.group || 99,
+      };
+    })
+    .sort((a, b) => a.group - b.group || a.name.localeCompare(b.name));
+  const message = buildRoundWelcomeGroupMessage({
+    campo,
+    description: round.description || "",
+    startedAt: round.startedAt,
+    players: roster,
+  });
+
+  await sendMessage(WELCOME_GROUP_ID, message);
+  await Round.updateOne(
+    { _id: roundId, welcomeSentAt: { $exists: false } },
+    {
+      $set: {
+        welcomeSentAt: new Date(),
+        welcomeSentPlayers: playerIds,
+      },
+    }
+  );
+}
+
 async function getConfigSnapshot() {
   let config = await Config.findOne({ key: "global" });
   if (!config) {
@@ -255,47 +332,14 @@ export async function POST(request) {
       }))
     );
     console.log('Tarjetas creadas')
-    const campo =
-      round.courseSnapshot?.clubName ||
-      round.courseSnapshot?.courseName ||
-      "el campo";
     const now = new Date();
     if (round.startedAt && round.startedAt <= now && !round.welcomeSentAt) {
-      const roster = participants
-        .map((player) => {
-          const teeName =
-            teeByPlayer.get(String(player._id)) || defaultTeeName || "";
-          const selectedTee =
-            allTees.find((option) => option.tee_name === teeName) || allTees[0];
-          const courseHandicap = selectedTee
-            ? getCourseHandicapForRound(
-                selectedTee,
-                round,
-                player.handicap || 0
-              )
-            : null;
-          return {
-            name: player.name,
-            handicap: player.handicap ?? 0,
-            teeName,
-            courseHandicap,
-            group:
-              round.playerGroups?.find(
-                (entry) => String(entry.player) === String(player._id)
-              )?.group || 99,
-          };
-        })
-        .sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name));
-      const message = buildRoundWelcomeGroupMessage({
-        campo,
-        description: round.description || "",
-        startedAt: round.startedAt,
-        players: roster,
-      });
-      await sendMessage(WELCOME_GROUP_ID, message);
-      round.welcomeSentAt = new Date();
-      round.welcomeSentPlayers = playerIds;
-      await round.save();
+      const roundId = String(round._id);
+      setTimeout(() => {
+        dispatchRoundWelcomeMessage(roundId).catch((error) => {
+          console.error("Round welcome dispatch failed:", error);
+        });
+      }, 0);
     }
   }
 

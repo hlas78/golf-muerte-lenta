@@ -16,6 +16,7 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../../components/AppShell";
+import ShotMissModal from "../../../components/ShotMissModal";
 import { getSocket } from "@/lib/socketClient";
 import {
   allocateStrokes,
@@ -128,6 +129,10 @@ export default function RecordScorecardPage() {
   const [activeScorecardId, setActiveScorecardId] = useState(null);
   const [reopeningScorecard, setReopeningScorecard] = useState(false);
   const [refreshingView, setRefreshingView] = useState(false);
+  const [shotMissModal, setShotMissModal] = useState({
+    opened: false,
+    hole: 1,
+  });
   const saveTimeout = useRef(null);
   const initialized = useRef(false);
   const loadedExisting = useRef(false);
@@ -661,6 +666,10 @@ export default function RecordScorecardPage() {
     (String(activePlayerId) === String(me?._id) ||
       role === "admin" ||
       role === "supervisor");
+  const isAdmin = role === "admin";
+  const isRoundParticipant = Boolean(
+    round?.players?.some((player) => String(player._id) === String(me?._id))
+  );
 
   const handleUpdateTee = async (value) => {
     if (!value || !activePlayerId || !params?.id) {
@@ -1189,6 +1198,13 @@ export default function RecordScorecardPage() {
             </Stack>
           )}
         </Modal>
+        <ShotMissModal
+          opened={shotMissModal.opened}
+          onClose={() => setShotMissModal({ opened: false, hole: 1 })}
+          roundId={params?.id}
+          player={me}
+          initialHole={shotMissModal.hole}
+        />
         <Card mb="sm" p="sm">
           <Group justify="space-between">
             <Group gap="xs">
@@ -1209,6 +1225,23 @@ export default function RecordScorecardPage() {
               <Badge color="club" variant="light">
                 Neto {formatToPar(activePlayerProgress.netToPar)}
               </Badge>
+              {isAdmin && isRoundParticipant ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={() =>
+                    setShotMissModal({
+                      opened: true,
+                      hole:
+                        holes.find(
+                          (entry) => entry.strokes == null || entry.strokes === ""
+                        )?.hole || 1,
+                    })
+                  }
+                >
+                  Falla
+                </Button>
+              ) : null}
             </Group>
             {/* <Badge color="club">{round?.holes || "--"} hoyos</Badge> */}
           </Group>

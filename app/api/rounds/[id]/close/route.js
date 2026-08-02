@@ -65,6 +65,53 @@ function minimizeTransfers(summary) {
   return transfers;
 }
 
+async function dispatchSettlementMessages(roundId) {
+  await connectDb();
+  const round = await Round.findById(roundId);
+  if (!round) {
+    return;
+  }
+  const payments = await Payment.find({ round: round._id });
+  if (payments.length === 0) {
+    return;
+  }
+  const participants = await User.find({
+    _id: { $in: Array.from(new Set(round.players || [])) },
+  });
+  const populatedScorecards = await Scorecard.find({ round: round._id })
+    .populate(
+      "player",
+      "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
+    )
+    .sort({ createdAt: 1 });
+  const randomMessage = `☠️ ${
+    SARCASTIC_MESSAGES[Math.floor(Math.random() * SARCASTIC_MESSAGES.length)]
+  } ☠️`;
+  const messagesByPlayerId = buildPlayerSettlementMessages({
+    round,
+    payments,
+    participants,
+    populatedScorecards,
+    randomMessage,
+  });
+
+  await Promise.allSettled(
+    participants.map((player) => {
+      const playerId = String(player._id);
+      const messages = messagesByPlayerId[playerId] || [];
+      return Promise.allSettled(
+        messages.map((message) =>
+          sendMessageWithRandomDelay(
+            sendMessage,
+            player.phone,
+            message.replace("Hoyo Hoyo", "Hoyo")
+          )
+        )
+      );
+    })
+  );
+}
+
 export async function POST(request, { params }) {
   await connectDb();
   const cookieStore = await cookies();
@@ -313,34 +360,17 @@ export async function POST(request, { params }) {
   const participants = await User.find({
     _id: { $in: Array.from(new Set(round.players || [])) },
   });
-  const randomMessage = `☠️ ${SARCASTIC_MESSAGES[Math.floor(Math.random() * SARCASTIC_MESSAGES.length)]} ☠️`;
-  const messagesByPlayerId = buildPlayerSettlementMessages({
-    round,
-    payments,
-    participants,
-    populatedScorecards,
-    randomMessage,
-  });
-
-  await Promise.allSettled(
-    participants.map((player) => {
-      const playerId = String(player._id);
-      const messages = messagesByPlayerId[playerId] || [];
-      return Promise.allSettled(
-        messages.map((message) =>
-          sendMessageWithRandomDelay(
-            sendMessage,
-            player.phone,
-            message.replace("Hoyo Hoyo", "Hoyo")
-          )
-        )
-      );
-    })
-  );
 
   round.status = "closed";
   round.endedAt = new Date();
   await round.save();
+
+  const closedRoundId = String(round._id);
+  setTimeout(() => {
+    dispatchSettlementMessages(closedRoundId).catch((error) => {
+      console.error("Settlement message dispatch failed:", error);
+    });
+  }, 0);
 
   return NextResponse.json({ ok: true, summary, optimizedTransfers });
 }

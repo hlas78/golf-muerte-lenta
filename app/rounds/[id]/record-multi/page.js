@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../../components/AppShell";
+import ShotMissModal from "../../../components/ShotMissModal";
 import { getSocket } from "@/lib/socketClient";
 import {
   allocateStrokes,
@@ -112,6 +113,11 @@ export default function RecordMultiPage() {
   const [autoSaving, setAutoSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [refreshingView, setRefreshingView] = useState(false);
+  const [shotMissModal, setShotMissModal] = useState({
+    opened: false,
+    hole: 1,
+    player: null,
+  });
   const autoSaveTimeout = useRef(null);
   const storageKey = useMemo(
     () => (params?.id ? `gml:round:${params.id}:record-multi:players` : ""),
@@ -123,6 +129,10 @@ export default function RecordMultiPage() {
   }, [round]);
   const canManageAllGroups =
     me?.role === "admin" || me?.role === "supervisor";
+  const isAdmin = me?.role === "admin";
+  const isRoundParticipant = Boolean(
+    round?.players?.some((player) => String(player._id) === String(me?._id))
+  );
   const myGroupNumber =
     round?.playerGroups?.find(
       (entry) => String(entry.player) === String(me?._id)
@@ -820,6 +830,15 @@ export default function RecordMultiPage() {
             </Button>
           </Group>
         </Modal>
+        <ShotMissModal
+          opened={shotMissModal.opened}
+          onClose={() =>
+            setShotMissModal({ opened: false, hole: 1, player: null })
+          }
+          roundId={params?.id}
+          player={me}
+          initialHole={shotMissModal.hole}
+        />
         <Card mb="sm" p="sm">
           <div>
             <Group gap="xs" mb={6}>
@@ -846,6 +865,20 @@ export default function RecordMultiPage() {
                 ? `Editar jugadores (${selectedPlayers.length})`
                 : "Seleccionar jugadores"}
             </Button>
+            {isAdmin && isRoundParticipant ? (
+              <Button
+                variant="light"
+                onClick={() =>
+                  setShotMissModal({
+                    opened: true,
+                    hole: holeNumber,
+                    player: me,
+                  })
+                }
+              >
+                Falla
+              </Button>
+            ) : null}
           </div>
           <Group align="flex-end" mt="xs">
             <Select
