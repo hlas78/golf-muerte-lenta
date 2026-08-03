@@ -3079,13 +3079,44 @@ export default function RoundDetailPage() {
           mt="xs"
           label="Acumular en empate / sin ganador (solo por hoyo)"
           checked={Boolean(betDraft?.accumulateOnTie)}
-          onChange={(event) =>
+          onChange={(event) => {
+            const checked = event.currentTarget.checked;
             setBetDraft((prev) => ({
               ...prev,
-              accumulateOnTie: event.currentTarget.checked,
-            }))
-          }
+              accumulateOnTie: checked,
+            }));
+          }}
         />
+        <Group mt="md">
+          <Text size="xs" c="dusk.6">
+            Predefinir montos:
+          </Text>
+          {[10, 20, 50, 100].map((preset) => (
+            <Button
+              key={preset}
+              size="xs"
+              variant="light"
+              onClick={() =>
+                setBetDraft((prev) => ({
+                  ...prev,
+                  amounts: {
+                    ...prev.amounts,
+                    front: preset * 2,
+                    back: preset * 2,
+                    round: preset * 3,
+                    hole: preset,
+                    birdie: preset,
+                    sandy: preset,
+                    wet: preset,
+                    ohYes: preset,
+                  },
+                }))
+              }
+            >
+              ${preset}
+            </Button>
+          ))}
+        </Group>
         <Group justify="flex-end" mt="md">
           <Button variant="light" onClick={() => setBetEditOpen(false)}>
             Cancelar

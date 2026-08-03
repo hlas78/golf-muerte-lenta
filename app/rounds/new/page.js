@@ -1462,12 +1462,13 @@ export default function NewRoundPage() {
                 mt="xs"
                 label="Acumular en empate / sin ganador (solo por hoyo)"
                 checked={Boolean(betDraft?.accumulateOnTie)}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const checked = event.currentTarget.checked;
                   setBetDraft((prev) => ({
                     ...prev,
-                    accumulateOnTie: event.currentTarget.checked,
-                  }))
-                }
+                    accumulateOnTie: checked,
+                  }));
+                }}
               />
               <Group mt="md">
                 <Text size="xs" c="dusk.6">
@@ -1483,9 +1484,9 @@ export default function NewRoundPage() {
                         ...prev,
                         amounts: {
                           ...prev.amounts,
-                          front: preset,
-                          back: preset,
-                          round: preset,
+                          front: preset * 2,
+                          back: preset * 2,
+                          round: preset * 3,
                           hole: preset,
                           birdie: preset,
                           sandy: preset,
