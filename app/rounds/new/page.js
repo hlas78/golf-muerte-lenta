@@ -136,7 +136,7 @@ export default function NewRoundPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/users?status=active")
+    fetch("/api/users?status=active&includeGrintPending=1")
       .then((res) => res.json())
       .then((data) => setUsers(Array.isArray(data) ? data : []))
       .catch(() => setUsers([]));
@@ -159,12 +159,29 @@ export default function NewRoundPage() {
     label: `${course.clubName} - ${course.courseName}`,
   }));
 
+  const formatGrintLastScoreDate = (value) => {
+    if (!value) {
+      return "Sin jugadas en Grint";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "Sin jugadas en Grint";
+    }
+    return date.toLocaleDateString("es-MX", {
+      day: "numeric",
+      month: "short",
+      year: "2-digit",
+    });
+  };
+
   const playerOptions = users.map((user) => ({
     value: user._id,
     label: `${user.name} · HC ${user.handicap ?? 0}`,
     name: user.name,
     handicap: user.handicap ?? 0,
     defaultTeeName: user.defaultTeeName || "",
+    grintLastScoreAt: user.grintLastScoreAt || null,
+    gmlRoundsWithoutGrint: Number(user.gmlRoundsWithoutGrint) || 0,
   }));
 
   const pollOptions = useMemo(
@@ -1236,7 +1253,20 @@ export default function NewRoundPage() {
                 return (
                   <Fragment key={player.value}>
                     <Table.Tr>
-                      <Table.Td>{player.name}</Table.Td>
+                      <Table.Td>
+                        <Text size="sm">{player.name}</Text>
+                        <Text
+                          size="xs"
+                          c={player.gmlRoundsWithoutGrint > 0 ? "red" : "dusk.6"}
+                        >
+                          Grint: {formatGrintLastScoreDate(player.grintLastScoreAt)}
+                        </Text>
+                        {player.gmlRoundsWithoutGrint > 0 ? (
+                          <Text size="xs" c="red" fw={600}>
+                            {player.gmlRoundsWithoutGrint} jugadas sin grint
+                          </Text>
+                        ) : null}
+                      </Table.Td>
                       <Table.Td>{player.handicap}</Table.Td>
                       <Table.Td>
                         {isEditing && selectedCourseId ? (

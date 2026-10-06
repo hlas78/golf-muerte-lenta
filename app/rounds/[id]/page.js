@@ -153,6 +153,9 @@ export default function RoundDetailPage() {
   const [playerGroupsDraft, setPlayerGroupsDraft] = useState({});
   const [groupMarshalsDraft, setGroupMarshalsDraft] = useState({});
   const [refreshingView, setRefreshingView] = useState(false);
+  const [quickHoleEdit, setQuickHoleEdit] = useState(null);
+  const [quickHoleStrokes, setQuickHoleStrokes] = useState("");
+  const [savingQuickHole, setSavingQuickHole] = useState(false);
 
   const holes = useMemo(
     () => Array.from({ length: round?.holes || 9 }, (_, idx) => idx + 1),
@@ -607,6 +610,92 @@ export default function RoundDetailPage() {
       )
   );
   const canCaptureGroup = canApprove || isMarshalForGroup;
+  const canQuickEditCard = (card) => {
+    const playerId = card?.player?._id;
+    if (!playerId || isClosed || (card.accepted && !isAdmin)) {
+      return false;
+    }
+    if (canManage || String(playerId) === String(me?._id)) {
+      return true;
+    }
+    if (!isMarshalForGroup || !myGroupNumber) {
+      return false;
+    }
+    const playerGroup = round?.playerGroups?.find(
+      (entry) => String(entry.player) === String(playerId)
+    )?.group;
+    return Number(playerGroup) === Number(myGroupNumber);
+  };
+
+  const openQuickHoleEdit = (card, hole, entry) => {
+    if (!canQuickEditCard(card)) {
+      return;
+    }
+    setQuickHoleEdit({ card, hole, entry: entry || { hole } });
+    setQuickHoleStrokes(entry?.strokes ?? "");
+  };
+
+  const saveQuickHoleEdit = async () => {
+    const strokes = Number(quickHoleStrokes);
+    const card = quickHoleEdit?.card;
+    if (!card?.player?._id || !Number.isFinite(strokes) || strokes < 1) {
+      notifications.show({
+        title: "Golpes requeridos",
+        message: "Captura un número válido de golpes.",
+        color: "clay",
+      });
+      return;
+    }
+
+    setSavingQuickHole(true);
+    try {
+      if (card.accepted && isAdmin) {
+        const reopenResponse = await fetch(
+          `/api/rounds/${params.id}/scorecards/${card._id}/reopen`,
+          { method: "POST" }
+        );
+        if (!reopenResponse.ok) {
+          throw new Error("No se pudo reabrir la tarjeta.");
+        }
+      }
+
+      const response = await fetch(`/api/rounds/${params.id}/scorecards`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playerId: card.player._id,
+          mergeByHole: true,
+          holes: [
+            {
+              ...quickHoleEdit.entry,
+              hole: quickHoleEdit.hole,
+              strokes,
+            },
+          ],
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "No se pudo guardar el hoyo.");
+      }
+
+      setQuickHoleEdit(null);
+      loadScorecards();
+      notifications.show({
+        title: "Hoyo actualizado",
+        message: `Se guardaron ${strokes} golpes en el hoyo ${quickHoleEdit.hole}.`,
+        color: "club",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "No se pudo actualizar",
+        message: error.message || "Intenta de nuevo.",
+        color: "clay",
+      });
+    } finally {
+      setSavingQuickHole(false);
+    }
+  };
   const canUploadAnyOwnGrint = useMemo(
     () =>
       Boolean(
@@ -1701,6 +1790,40 @@ export default function RoundDetailPage() {
   return (
     <main>
       <AppShell title="Jugada activa" subtitle={roundStartLabel}>
+        <Modal
+          opened={Boolean(quickHoleEdit)}
+          onClose={() => setQuickHoleEdit(null)}
+          title="Editar golpes"
+          centered
+          size="xs"
+        >
+          <Text fw={700}>{quickHoleEdit?.card?.player?.name || "Jugador"}</Text>
+          <Text size="sm" c="dusk.6" mb="md">
+            Hoyo {quickHoleEdit?.hole} · Par{" "}
+            {holeMeta[quickHoleEdit?.hole]?.par ?? "-"}
+          </Text>
+          <NumberInput
+            label="Golpes"
+            value={quickHoleStrokes}
+            onChange={setQuickHoleStrokes}
+            min={1}
+            max={30}
+            inputMode="numeric"
+            autoFocus
+          />
+          <Group justify="flex-end" mt="md">
+            <Button
+              variant="default"
+              onClick={() => setQuickHoleEdit(null)}
+              disabled={savingQuickHole}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={saveQuickHoleEdit} loading={savingQuickHole}>
+              Guardar
+            </Button>
+          </Group>
+        </Modal>
       <Modal
         opened={deleteOpen}
         onClose={() => setDeleteOpen(false)}
@@ -2262,6 +2385,19 @@ export default function RoundDetailPage() {
                           return (
                             <Table.Td
                               key={hole}
+                              onDoubleClick={() =>
+                                openQuickHoleEdit(card, hole, entry)
+                              }
+                              title={
+                                canQuickEditCard(card)
+                                  ? `Doble clic para editar el hoyo ${hole}`
+                                  : undefined
+                              }
+                              style={
+                                canQuickEditCard(card)
+                                  ? { cursor: "pointer" }
+                                  : undefined
+                              }
                               className={[
                                 isWinningCell ? "gml-win-cell" : "",
                                 advantageCount > 0 ? "gml-advantage-cell" : "",
