@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Card, Group, Select, Table, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../components/AppShell";
+import PoolReport from "../components/PoolReport";
 
 const pad2 = (value) => String(value).padStart(2, "0");
 
@@ -39,8 +40,10 @@ export default function ReportsPage() {
   const [reportType, setReportType] = useState("payments");
   const [startDate, setStartDate] = useState(defaultRange.start);
   const [endDate, setEndDate] = useState(defaultRange.end);
-  const [sortKey, setSortKey] = useState("name");
-  const [sortDir, setSortDir] = useState("asc");
+  const [{ key: sortKey, direction: sortDir }, setSort] = useState({
+    key: "name",
+    direction: "asc",
+  });
   const [report, setReport] = useState(null);
   const [loadingReport, setLoadingReport] = useState(false);
 
@@ -119,14 +122,11 @@ export default function ReportsPage() {
   }, [rows, sortDir, sortKey]);
 
   const updateSort = (key) => {
-    setSortKey((prevKey) => {
-      if (prevKey === key) {
-        setSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
-        return prevKey;
-      }
-      setSortDir("asc");
-      return key;
-    });
+    setSort((previous) => ({
+      key,
+      direction:
+        previous.key === key && previous.direction === "asc" ? "desc" : "asc",
+    }));
   };
 
   if (!isAdmin) {
@@ -158,15 +158,18 @@ export default function ReportsPage() {
               label="Reporte"
               value={reportType}
               onChange={(value) => setReportType(value || "payments")}
-              data={[{ value: "payments", label: "Pagos" }]}
+              data={[
+                { value: "payments", label: "Pagos" },
+                { value: "pool", label: "Simulación de bolsa" },
+              ]}
             />
-            <Button onClick={loadReport} loading={loadingReport}>
+            {reportType === "payments" && <Button onClick={loadReport} loading={loadingReport}>
               Cargar
-            </Button>
+            </Button>}
           </Group>
         </Card>
 
-        <Card>
+        {reportType === "pool" ? <PoolReport startDate={startDate} endDate={endDate} /> : <Card>
           {loading ? (
             <Text>Cargando...</Text>
           ) : reportType !== "payments" ? (
@@ -178,71 +181,84 @@ export default function ReportsPage() {
               No hay pagos en este rango.
             </Text>
           ) : (
-            <Table striped>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th
-                    style={{ cursor: "pointer" }}
-                    onClick={() => updateSort("name")}
-                  >
-                    Jugador
-                  </Table.Th>
-                  {columns.map((column) => (
+            <div
+              className="gml-table-scroll"
+              role="region"
+              aria-label="Reporte de pagos"
+              tabIndex={0}
+            >
+              <Table striped style={{ whiteSpace: "nowrap" }}>
+                <Table.Thead>
+                  <Table.Tr>
                     <Table.Th
-                      key={column.id}
+                      className="gml-sticky-col"
                       style={{ cursor: "pointer" }}
-                      onClick={() => updateSort(column.id)}
+                      onClick={() => updateSort("name")}
                     >
-                      {column.label}
+                      Jugador
                     </Table.Th>
-                  ))}
-                  <Table.Th
-                    style={{ cursor: "pointer" }}
-                    onClick={() => updateSort("roundsCount")}
-                  >
-                    # Jugadas
-                  </Table.Th>
-                  <Table.Th
-                    style={{ cursor: "pointer" }}
-                    onClick={() => updateSort("total")}
-                  >
-                    Total
-                  </Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {sortedRows.map((row) => (
-                  <Table.Tr key={row.playerId}>
-                    <Table.Td>{row.name}</Table.Td>
-                    {columns.map((column) => {
-                      const value = row.values?.[column.id] ?? 0;
-                      const formatted =
-                        value === 0
-                          ? "-"
-                          : `${value > 0 ? "+" : "-"}$${Math.abs(value)}`;
-                      return (
-                        <Table.Td
-                          key={column.id}
-                          c={value < 0 ? "clay" : undefined}
-                        >
-                          {formatted}
-                        </Table.Td>
-                      );
-                    })}
-                    <Table.Td>{row.roundsCount ?? 0}</Table.Td>
-                    <Table.Td>
-                      <Text c={row.total < 0 ? "clay" : undefined}>
-                        {row.total === 0
-                          ? "-"
-                          : `${row.total > 0 ? "+" : "-"}$${Math.abs(row.total)}`}
-                      </Text>
-                    </Table.Td>
+                    {columns.map((column) => (
+                      <Table.Th
+                        key={column.id}
+                        style={{ cursor: "pointer" }}
+                        onClick={() => updateSort(column.id)}
+                      >
+                        {column.label}
+                      </Table.Th>
+                    ))}
+                    <Table.Th
+                      style={{ cursor: "pointer" }}
+                      onClick={() => updateSort("roundsCount")}
+                    >
+                      # Jugadas
+                    </Table.Th>
+                    <Table.Th
+                      style={{ cursor: "pointer" }}
+                      onClick={() => updateSort("total")}
+                    >
+                      Total
+                    </Table.Th>
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+                </Table.Thead>
+                <Table.Tbody>
+                  {sortedRows.map((row) => (
+                    <Table.Tr key={row.playerId}>
+                      <Table.Td className="gml-sticky-col">
+                        {row.name}
+                        <Text size="xs" c="dusk.6">
+                          HC (index): {row.handicap ?? "—"}
+                        </Text>
+                      </Table.Td>
+                      {columns.map((column) => {
+                        const value = row.values?.[column.id] ?? 0;
+                        const formatted =
+                          value === 0
+                            ? "-"
+                            : `${value > 0 ? "+" : "-"}$${Math.abs(value)}`;
+                        return (
+                          <Table.Td
+                            key={column.id}
+                            c={value < 0 ? "clay" : undefined}
+                          >
+                            {formatted}
+                          </Table.Td>
+                        );
+                      })}
+                      <Table.Td>{row.roundsCount ?? 0}</Table.Td>
+                      <Table.Td>
+                        <Text c={row.total < 0 ? "clay" : undefined}>
+                          {row.total === 0
+                            ? "-"
+                            : `${row.total > 0 ? "+" : "-"}$${Math.abs(row.total)}`}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </div>
           )}
-        </Card>
+        </Card>}
       </AppShell>
     </main>
   );

@@ -82,7 +82,7 @@ export async function GET(request) {
   });
 
   const players = await User.find({ _id: { $in: Array.from(playerIds) } })
-    .select("name")
+    .select("name handicap")
     .lean();
   const playerById = players.reduce((acc, player) => {
     acc[String(player._id)] = player;
@@ -103,6 +103,7 @@ export async function GET(request) {
     rowsByPlayer[playerId] = {
       playerId,
       name: playerById[playerId]?.name || "Jugador",
+      handicap: playerById[playerId]?.handicap ?? null,
       values: {},
       total: 0,
       roundsCount: 0,

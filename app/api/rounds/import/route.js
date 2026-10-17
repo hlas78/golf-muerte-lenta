@@ -7,6 +7,7 @@ import Scorecard from "@/lib/models/Scorecard";
 import Payment from "@/lib/models/Payment";
 import User from "@/lib/models/User";
 import { verifyToken } from "@/lib/auth";
+import { duplicateOhYesHoles } from "@/lib/poolSimulation.mjs";
 
 export async function POST(request) {
   await connectDb();
@@ -24,6 +25,13 @@ export async function POST(request) {
   const data = await request.json();
   if (!data?.round || !data?.players) {
     return NextResponse.json({ error: "Archivo invalido" }, { status: 400 });
+  }
+
+  const duplicates = duplicateOhYesHoles(Array.isArray(data.scorecards) ? data.scorecards : []);
+  if (duplicates.length > 0) {
+    return NextResponse.json({
+      error: `Solo puede existir un ganador de Oh yes por hoyo. Revisa: ${duplicates.join(", ")}.`,
+    }, { status: 400 });
   }
 
   const playersByPhone = new Map();

@@ -19,6 +19,7 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AppShell from "../../components/AppShell";
+import RoundPoolSummary from "../../components/RoundPoolSummary";
 import { getSocket } from "@/lib/socketClient";
 import { getCourseHandicapForRound } from "@/lib/scoring";
 import { normalizeHoleHandicaps } from "@/lib/scoring";
@@ -2812,6 +2813,12 @@ export default function RoundDetailPage() {
                 </>
               );
             })()
+          )}
+          {isAdmin && isClosed && (
+            <RoundPoolSummary
+              key={`${round._id}:${round.updatedAt || ""}`}
+              roundId={round._id}
+            />
           )}
         </Card>
 

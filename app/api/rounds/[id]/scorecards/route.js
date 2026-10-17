@@ -15,6 +15,7 @@ import Config from "@/lib/models/Config";
 import { verifyToken } from "@/lib/auth";
 import { WIN_MESSAGES } from "@/lib/winMessages";
 import { PENALTY_MESSAGES } from "@/lib/penaltyMessages";
+import { serializeRoundSave } from "@/lib/roundSaveQueue.mjs";
 
 const require = createRequire(import.meta.url);
 const { sendMessage } = require("@/scripts/sendMessage");
@@ -60,6 +61,11 @@ export async function GET(request, { params }) {
 }
 
 export async function POST(request, { params }) {
+  const { id } = await params;
+  return serializeRoundSave(id, () => saveScorecard(request, { params: { id } }));
+}
+
+async function saveScorecard(request, { params }) {
   await connectDb();
   const cookieStore = await cookies();
   const token = cookieStore.get("gml_token")?.value;
@@ -171,6 +177,13 @@ export async function POST(request, { params }) {
         : hole
     );
   }
+  if (holes.some((hole) => !Number.isInteger(hole.hole) || hole.hole < 1 || hole.hole > round.holes) ||
+      new Set(holes.map((hole) => hole.hole)).size !== holes.length) {
+    return NextResponse.json({ error: "La tarjeta contiene hoyos inválidos o duplicados." }, { status: 400 });
+  }
+  if (holes.some((hole) => hole.ohYes && parByHole[hole.hole] !== 3)) {
+    return NextResponse.json({ error: "Oh yes solo se puede registrar en un par 3." }, { status: 400 });
+  }
   const grossTotal = holes
     .slice(0, round.holes)
     .reduce((sum, hole) => sum + (hole.strokes || 0), 0);
@@ -185,21 +198,6 @@ export async function POST(request, { params }) {
     return sum + net;
   }, 0);
 
-  const scorecard = await Scorecard.findOneAndUpdate(
-    { round: round._id, player: player._id },
-    {
-      round: round._id,
-      player: player._id,
-      teeName: tee?.tee_name || playerTee || "",
-      courseHandicap,
-      holes,
-      grossTotal,
-      puttsTotal,
-      netTotal,
-    },
-    { upsert: true, new: true }
-  );
-
   const ohYesHoles = holes
     .filter(
       (hole) => hole?.hole && hole.ohYes && parByHole[hole.hole] === 3
@@ -212,8 +210,7 @@ export async function POST(request, { params }) {
         const existingOhYesCards = await Scorecard.find({
           round: round._id,
           player: { $ne: player._id },
-          "holes.hole": holeNumber,
-          "holes.ohYes": true,
+          holes: { $elemMatch: { hole: holeNumber, ohYes: true } },
         }).populate(
           "player",
           "-passwordHash -magicToken -magicTokenCreatedAt -grintPasswordEncrypted -grintScoreHistory"
@@ -241,13 +238,31 @@ export async function POST(request, { params }) {
               const message = template
                 .replace("{hole}", holeNumber)
                 .replace("{player}", player?.name || "Alguien");
-              await sendMessage(loser.phone, message);
+              await sendMessage(loser.phone, message).catch((error) => {
+                console.error("No se pudo notificar el cambio de Oh yes:", String(error));
+              });
             }
           })
         );
       })
     );
   }
+
+  // Clear former winners before assigning the new one, within the round save queue.
+  const scorecard = await Scorecard.findOneAndUpdate(
+    { round: round._id, player: player._id },
+    {
+      round: round._id,
+      player: player._id,
+      teeName: tee?.tee_name || playerTee || "",
+      courseHandicap,
+      holes,
+      grossTotal,
+      puttsTotal,
+      netTotal,
+    },
+    { upsert: true, new: true }
+  );
 
   const getWinningEvents = (hole) => {
     const events = [];

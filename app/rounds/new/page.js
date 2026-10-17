@@ -1732,7 +1732,7 @@ export default function NewRoundPage() {
               autosize
               minRows={2}
             />
-            <div>
+            <div hidden>
               <Text size="sm" fw={600} mb={6}>
                 Apuestas
               </Text>
@@ -1819,7 +1819,7 @@ export default function NewRoundPage() {
                 </Text>
               )}
             </div>
-            <div>
+            <div hidden>
               <Text size="sm" fw={600} mb={6}>
                 Culebra
               </Text>
