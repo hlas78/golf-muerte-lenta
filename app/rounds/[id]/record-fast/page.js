@@ -17,6 +17,7 @@ import { notifications } from "@mantine/notifications";
 import AppShell from "../../../components/AppShell";
 import ShotMissModal from "../../../components/ShotMissModal";
 import { getSocket } from "@/lib/socketClient";
+import { decreaseStrokes } from "@/lib/strokeControls.mjs";
 
 const buildEmptyHoles = (count) =>
   Array.from({ length: count }, (_, idx) => ({
@@ -216,6 +217,14 @@ export default function RecordFastPage() {
   const updateNumber = (playerId, delta) => {
     const card = getCardForPlayer(playerId);
     const entry = card.holes?.find((hole) => hole.hole === holeNumber);
+    if (delta < 0) {
+      try {
+        updatePlayerHole(playerId, { strokes: decreaseStrokes(entry?.strokes, entry?.putts) });
+      } catch (error) {
+        notifications.show({ title: "Revisa los putts", message: error.message, color: "clay" });
+      }
+      return;
+    }
     const current = Number(entry?.strokes ?? 0);
     const next = Math.max(0, current + delta);
     updatePlayerHole(playerId, { strokes: next });

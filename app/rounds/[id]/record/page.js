@@ -18,6 +18,7 @@ import { notifications } from "@mantine/notifications";
 import AppShell from "../../../components/AppShell";
 import ShotMissModal from "../../../components/ShotMissModal";
 import { getSocket } from "@/lib/socketClient";
+import { decreaseStrokes } from "@/lib/strokeControls.mjs";
 import {
   allocateStrokes,
   getCourseHandicapForRound,
@@ -778,6 +779,14 @@ export default function RecordScorecardPage() {
   };
 
   const updateNumber = (index, key, delta) => {
+    if (key === "strokes" && delta < 0) {
+      try {
+        updateHole(index, { strokes: decreaseStrokes(holes[index]?.strokes, holes[index]?.putts) });
+      } catch (error) {
+        notifications.show({ title: "Revisa los putts", message: error.message, color: "clay" });
+      }
+      return;
+    }
     const current = Number(holes[index]?.[key] ?? 0);
     const next = Math.max(0, current + delta);
     updateHole(index, { [key]: next });

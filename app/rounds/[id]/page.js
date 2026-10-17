@@ -23,6 +23,8 @@ import RoundPoolSummary from "../../components/RoundPoolSummary";
 import { getSocket } from "@/lib/socketClient";
 import { getCourseHandicapForRound } from "@/lib/scoring";
 import { normalizeHoleHandicaps } from "@/lib/scoring";
+import { buildQuickHoleUpdate } from "@/lib/quickHoleEdit.mjs";
+import { decreaseStrokes } from "@/lib/strokeControls.mjs";
 
 const PENALTY_LABELS = {
   pinkies: "Pinkies",
@@ -156,6 +158,7 @@ export default function RoundDetailPage() {
   const [refreshingView, setRefreshingView] = useState(false);
   const [quickHoleEdit, setQuickHoleEdit] = useState(null);
   const [quickHoleStrokes, setQuickHoleStrokes] = useState("");
+  const [quickHoleDraft, setQuickHoleDraft] = useState({});
   const [savingQuickHole, setSavingQuickHole] = useState(false);
 
   const holes = useMemo(
@@ -632,17 +635,36 @@ export default function RoundDetailPage() {
     if (!canQuickEditCard(card)) {
       return;
     }
-    setQuickHoleEdit({ card, hole, entry: entry || { hole } });
+    const tees = round?.courseSnapshot?.tees || {};
+    const allTees = [...(tees.male || []), ...(tees.female || [])];
+    const teeName = round?.playerTees?.find(
+      (item) => String(item.player) === String(card.player._id)
+    )?.teeName || card.teeName || round?.teeName;
+    const tee = allTees.find((item) => item.tee_name === teeName) || allTees[0];
+    const par = normalizeHoleHandicaps(tee?.holes || [], round)
+      .find((item, index) => (item.hole ?? index + 1) === hole)?.par ?? entry?.par;
+    setQuickHoleEdit({ card, hole, par, entry: entry || { hole } });
     setQuickHoleStrokes(entry?.strokes ?? "");
+    setQuickHoleDraft({
+      putts: entry?.putts ?? "",
+      sandy: Boolean(entry?.sandy),
+      water: Boolean(entry?.water),
+      ohYes: Boolean(entry?.ohYes),
+      holeOut: Boolean(entry?.holeOut || (entry?.putts === 0 && entry?.strokes != null && entry.strokes <= par)),
+      penalties: Array.isArray(entry?.penalties) ? [...entry.penalties] : [],
+    });
   };
 
   const saveQuickHoleEdit = async () => {
-    const strokes = Number(quickHoleStrokes);
     const card = quickHoleEdit?.card;
-    if (!card?.player?._id || !Number.isFinite(strokes) || strokes < 1) {
+    if (!card?.player?._id || !canQuickEditCard(card) || savingQuickHole) return;
+    let updatedHole;
+    try {
+      updatedHole = buildQuickHoleUpdate({ ...quickHoleEdit, strokes: quickHoleStrokes, draft: quickHoleDraft });
+    } catch (error) {
       notifications.show({
-        title: "Golpes requeridos",
-        message: "Captura un número válido de golpes.",
+        title: "Revisa la captura",
+        message: error.message,
         color: "clay",
       });
       return;
@@ -666,13 +688,7 @@ export default function RoundDetailPage() {
         body: JSON.stringify({
           playerId: card.player._id,
           mergeByHole: true,
-          holes: [
-            {
-              ...quickHoleEdit.entry,
-              hole: quickHoleEdit.hole,
-              strokes,
-            },
-          ],
+          holes: [updatedHole],
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -682,9 +698,13 @@ export default function RoundDetailPage() {
 
       setQuickHoleEdit(null);
       loadScorecards();
+      getSocket().emit("scorecard:update", {
+        roundId: params.id,
+        payload: { hole: quickHoleEdit.hole },
+      });
       notifications.show({
         title: "Hoyo actualizado",
-        message: `Se guardaron ${strokes} golpes en el hoyo ${quickHoleEdit.hole}.`,
+        message: `Se guardaron los datos del hoyo ${quickHoleEdit.hole}.`,
         color: "club",
       });
     } catch (error) {
@@ -1793,25 +1813,123 @@ export default function RoundDetailPage() {
       <AppShell title="Jugada activa" subtitle={roundStartLabel}>
         <Modal
           opened={Boolean(quickHoleEdit)}
-          onClose={() => setQuickHoleEdit(null)}
-          title="Editar golpes"
+          onClose={() => { if (!savingQuickHole) setQuickHoleEdit(null); }}
+          title="Editar hoyo"
           centered
-          size="xs"
+          size="sm"
+          closeOnClickOutside={!savingQuickHole}
+          closeOnEscape={!savingQuickHole}
+          withCloseButton={!savingQuickHole}
         >
           <Text fw={700}>{quickHoleEdit?.card?.player?.name || "Jugador"}</Text>
           <Text size="sm" c="dusk.6" mb="md">
             Hoyo {quickHoleEdit?.hole} · Par{" "}
-            {holeMeta[quickHoleEdit?.hole]?.par ?? "-"}
+            {quickHoleEdit?.par ?? "-"}
           </Text>
-          <NumberInput
-            label="Golpes"
-            value={quickHoleStrokes}
-            onChange={setQuickHoleStrokes}
-            min={1}
-            max={30}
-            inputMode="numeric"
-            autoFocus
-          />
+          <Group grow align="flex-start" gap="xs">
+            {["strokes", "putts"].map((key) => {
+              const value = key === "strokes" ? quickHoleStrokes : quickHoleDraft.putts;
+              const label = key === "strokes" ? "Golpes" : "Putts";
+              const minimum = key === "strokes" ? 1 : 0;
+              const change = (delta) => {
+                if (key === "strokes") {
+                  if (delta < 0) {
+                    try {
+                      setQuickHoleStrokes(decreaseStrokes(quickHoleStrokes, quickHoleDraft.putts));
+                    } catch (error) {
+                      notifications.show({ title: "Revisa los putts", message: error.message, color: "clay" });
+                    }
+                    return;
+                  }
+                  setQuickHoleStrokes((previous) => Math.min(30, Math.max(minimum, Number(previous || 0) + delta)));
+                } else {
+                  setQuickHoleDraft((previous) => {
+                    const putts = Math.min(30, Math.max(0, Number(previous.putts || 0) + delta));
+                    return { ...previous, putts, holeOut: putts === 0 };
+                  });
+                }
+              };
+              return (
+                <div className="gml-stepper" key={key} style={{ minWidth: 168 }}>
+                  <Text size="sm" fw={600}>{label}</Text>
+                  <div className="gml-stepper-controls">
+                    <Button
+                      variant="light"
+                      className="gml-score-btn"
+                      aria-label={`Disminuir ${label.toLowerCase()}`}
+                      disabled={savingQuickHole || (value !== "" && value != null && Number(value) <= minimum)}
+                      onClick={() => change(-1)}
+                    >−</Button>
+                    <Text fw={700} className="gml-stepper-value" aria-live="polite">
+                      {value === "" || value == null ? "—" : value}
+                    </Text>
+                    <Button
+                      variant="light"
+                      className="gml-score-btn"
+                      aria-label={`Aumentar ${label.toLowerCase()}`}
+                      disabled={savingQuickHole || Number(value) >= 30}
+                      onClick={() => change(1)}
+                    >+</Button>
+                  </div>
+                </div>
+              );
+            })}
+          </Group>
+          <Text fw={600} mt="md" mb="xs">Eventos</Text>
+          <Group gap="xs">
+            {[["sandy", "Sandy", "yellow"], ["water", "Wet", "blue"], ["holeOut", "Hole out", "club"], ...(quickHoleEdit?.par === 3 ? [["ohYes", "Oh yes", "clay"]] : [])].map(([key, label, color]) => (
+              <Button
+                key={key}
+                size="xs"
+                className="gml-score-btn"
+                color={color}
+                variant={quickHoleDraft[key] ? "filled" : "light"}
+                aria-pressed={Boolean(quickHoleDraft[key])}
+                disabled={savingQuickHole}
+                onClick={() => {
+                  setQuickHoleDraft((previous) => {
+                    const active = !previous[key];
+                    return {
+                      ...previous,
+                      [key]: active,
+                      ...(key === "holeOut" ? { putts: active ? 0 : "" } : {}),
+                    };
+                  });
+                }}
+              >{label}</Button>
+            ))}
+          </Group>
+          {quickHoleDraft.ohYes && quickHoleEdit?.par === 3 && (
+            <Text size="xs" c="dusk.6" mt="xs">Al guardar, el Oh yes de este hoyo se quitará a cualquier otro jugador que lo tenga.</Text>
+          )}
+          <Text fw={600} mt="md" mb="xs">Castigos</Text>
+          <Group gap="xs">
+            {Object.entries(PENALTY_LABELS).filter(([key]) => !["cuatriputt", "nerdina"].includes(key)).map(([key, label]) => {
+              const active = quickHoleDraft.penalties?.includes(key) || false;
+              return (
+                <Button
+                  key={key}
+                  size="xs"
+                  className="gml-score-btn"
+                  variant={active ? "filled" : "light"}
+                  color={active ? "clay" : "dusk"}
+                  aria-pressed={active}
+                  disabled={savingQuickHole}
+                  onClick={() => setQuickHoleDraft((previous) => ({
+                    ...previous,
+                    penalties: previous.penalties?.includes(key)
+                      ? previous.penalties.filter((penalty) => penalty !== key)
+                      : [...(previous.penalties || []), key],
+                  }))}
+                >{label}</Button>
+              );
+            })}
+          </Group>
+          
+          <Group gap="xs" mt="xs">
+            {Number(quickHoleDraft.putts) >= 4 && <Badge color="clay">Cuatriputt</Badge>}
+            {Number(quickHoleStrokes) >= 10 && <Badge color="clay">Nerdiña</Badge>}
+          </Group>
           <Group justify="flex-end" mt="md">
             <Button
               variant="default"
